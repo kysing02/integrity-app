@@ -11,7 +11,7 @@ const FlexBucket = ({ totalFlexMinutes, usedMinutes }: FlexBucketProps) => {
   const formatTime = (mins: number) => {
     const h = Math.floor(mins / 60);
     const m = mins % 60;
-    return `${h}h ${m > 0 ? m + 'm' : '00'}`;
+    return `${h}h ${m > 0 ? m + 'm' : '00m'}`;
   };
 
   return (
