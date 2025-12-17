@@ -123,3 +123,26 @@
     @apply bg-background text-foreground;
   }
 }
+
+/* Disable selection globally */
+html, body {
+  -webkit-user-select: none; /* Safari/Chrome */
+  -moz-user-select: none;    /* Firefox */
+  -ms-user-select: none;     /* IE/Edge */
+  user-select: none;         /* Standard */
+  -webkit-tap-highlight-color: transparent; /* Removes blue flash on mobile tap */
+  cursor: default;           /* Prevents "I-beam" text cursor */
+
+  /* THIS disable the long-press vibration/menu on Mobile */
+  -webkit-touch-callout: none !important;
+  
+  /* Removes blue highlight on tap */
+  -webkit-tap-highlight-color: transparent;
+}
+
+/* Re-enable selection ONLY for input fields */
+input, textarea {
+  -webkit-user-select: text;
+  user-select: text;
+  cursor: text;
+}
