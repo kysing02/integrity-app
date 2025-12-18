@@ -93,11 +93,22 @@ const DaySummaryModal = ({
                 let dotBorder = isIdle ? 'border-amber-300' : (isEfficiency ? 'border-emerald-500' : 'border-indigo-500');
                 let textColor = isIdle ? 'text-slate-500 italic' : 'text-slate-800';
                 
-                // Deviation Logic
-                const plannedSecs = seg.plannedRange ? parseDurationToSeconds(seg.plannedRange) : 0;
-                const diff = Math.abs(seg.durationSeconds - plannedSecs);
-                // Show warning if difference > 15 mins AND planned time was > 0
-                const showWarning = !isIdle && plannedSecs > 0 && diff > 900; 
+                // --- NEW DEVIATION LOGIC ---
+                let showWarning = false;
+                let diff = 0;
+
+                // Only calculate deviation if this is the LAST entry for this task
+                if (!isIdle && seg.isLastForTask && seg.originalTask) {
+                    const plannedSecs = seg.plannedRange ? parseDurationToSeconds(seg.plannedRange) : 0;
+                    const actualTotal = seg.totalTaskDuration || 0;
+                    
+                    diff = Math.abs(actualTotal - plannedSecs);
+                    
+                    // Show if deviation > 15 mins AND there was a plan
+                    if (plannedSecs > 0 && diff > 900) {
+                        showWarning = true;
+                    }
+                }
 
                 return (
                   <div key={i} className="relative pl-6">
@@ -120,10 +131,12 @@ const DaySummaryModal = ({
                               </span>
                            </div>
                            
+                           {/* Only show on the LAST segment for this task */}
                            {showWarning && (
-                             <div className="flex items-center gap-2 text-[10px] text-rose-500 font-semibold">
+                             <div className="flex items-center gap-2 text-[10px] text-rose-500 font-semibold animate-in fade-in">
                                <AlertCircle size={12} />
-                               <span>Deviation: {formatDur(diff)}</span>
+                               {/* Hint: You can optionally show (Total: Xm) to explain why */}
+                               <span>Short by {formatDur(diff)} (Total: {formatDur(seg.totalTaskDuration || 0)})</span>
                              </div>
                            )}
                          </div>
