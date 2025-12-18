@@ -23,6 +23,16 @@ const INITIAL_DAILY: TaskItem[] = [
   { id: 'd3', title: "Tidy Room", timeRange: "30m", score: 0, status: 'pending', category: 'EFFICIENCY', icon: Brush, isDaily: true, elapsedSeconds: 0 },
 ];
 
+interface ModalConfig {
+  isOpen: boolean;
+  mode: 'add' | 'edit';
+  type: 'schedule' | 'daily';
+  initialData?: Partial<TaskItem>;
+  insertIndex?: number; // Used when adding new task
+  minTime?: string;
+  maxTime?: string;
+}
+
 export function useDashboard() {
   // --- STATE ---
   const [dayStatus, setDayStatus] = useState<'sleeping' | 'active' | 'completed'>('active');
@@ -33,7 +43,9 @@ export function useDashboard() {
   const [scheduleTasks, setScheduleTasks] = useState<TaskItem[]>(INITIAL_SCHEDULE);
   const [dailyActions, setDailyActions] = useState<TaskItem[]>(INITIAL_DAILY);
   const [flexCapacitySeconds, setFlexCapacitySeconds] = useState(0);
-
+  const [modalConfig, setModalConfig] = useState<ModalConfig>({
+      isOpen: false, mode: 'add', type: 'schedule'
+  });
   // --- HYDRATION ---
   useEffect(() => {
     const d = new Date(); d.setHours(7, 0, 0, 0); setCheckInTime(d);
@@ -164,15 +176,105 @@ export function useDashboard() {
     setDailyActions([...dailyActions, newAction]);
   };
 
+  // 1. OPEN ADD MODAL
+  const openAddSchedule = (index: number) => {
+    // Smart Defaults Logic
+    const prevTask = index >= 0 ? scheduleTasks[index] : null; // Task BEFORE insertion point
+    const nextTask = scheduleTasks[index + 1]; // Task AFTER insertion point
+
+    // Default Start: End of prev task OR Check-in time (07:00)
+    let minTime = "07:00";
+    if (prevTask) {
+       const parts = prevTask.timeRange.split('-');
+       if (parts[1]) minTime = parts[1].trim();
+    }
+
+    // Default End: Start of next task OR 23:00
+    let maxTime = "23:00";
+    if (nextTask) {
+       const parts = nextTask.timeRange.split('-');
+       if (parts[0]) maxTime = parts[0].trim();
+    }
+
+    setModalConfig({
+      isOpen: true,
+      mode: 'add',
+      type: 'schedule',
+      insertIndex: index,
+      minTime,
+      maxTime
+    });
+  };
+
+  const openAddDaily = () => {
+    setModalConfig({
+      isOpen: true,
+      mode: 'add',
+      type: 'daily'
+    });
+  };
+
+  // 2. OPEN EDIT MODAL
+  const openEditTask = (task: TaskItem) => {
+    setModalConfig({
+      isOpen: true,
+      mode: 'edit',
+      type: task.isDaily ? 'daily' : 'schedule',
+      initialData: task
+    });
+  };
+
+  // 3. SAVE HANDLER
+  const saveTask = (data: Partial<TaskItem>) => {
+    if (modalConfig.mode === 'add') {
+      const newTask: TaskItem = {
+        id: Math.random().toString(),
+        title: data.title || "New Task",
+        timeRange: data.timeRange || "--:--",
+        score: 0,
+        status: 'pending',
+        category: data.category || 'CONSISTENCY',
+        icon: data.icon || Brain,
+        elapsedSeconds: 0,
+        isDaily: modalConfig.type === 'daily'
+      };
+
+      if (modalConfig.type === 'daily') {
+        setDailyActions([...dailyActions, newTask]);
+      } else {
+        const newTasks = [...scheduleTasks];
+        // Insert after the index provided
+        const idx = modalConfig.insertIndex !== undefined ? modalConfig.insertIndex : -1;
+        if (idx === -1) newTasks.unshift(newTask);
+        else newTasks.splice(idx + 1, 0, newTask);
+        setScheduleTasks(newTasks);
+      }
+    } else {
+      // EDIT MODE
+      const updater = (list: TaskItem[]) => list.map(t => 
+        t.id === modalConfig.initialData?.id ? { ...t, ...data } : t
+      );
+      if (modalConfig.type === 'daily') setDailyActions(prev => updater(prev));
+      else setScheduleTasks(prev => updater(prev));
+    }
+    closeModal();
+  };
+
+  const closeModal = () => setModalConfig(prev => ({ ...prev, isOpen: false }));
+
   return {
     state: {
       dayStatus, checkInTime, hasSchedule, isEditing, isEditingActions,
       scheduleTasks, dailyActions, flexCapacitySeconds, activeTask, totalVolumeSeconds,
-      pillState, debugTime: DEBUG_TIME
+      pillState, debugTime: DEBUG_TIME, modalConfig
     },
     actions: {
       startDay, endDay, setHasSchedule, setIsEditing, setIsEditingActions,
-      toggleTask, toggleComplete, deleteTask, insertTask, addDailyAction
+      toggleTask, toggleComplete, deleteTask, insertTask, addDailyAction, openAddSchedule, 
+      openAddDaily,
+      openEditTask,
+      saveTask,
+      closeModal
     },
     helpers: { isTimeInPast, getNow }
   };

@@ -45,7 +45,7 @@ const TaskCircle = ({
   };
 
   const handleClick = () => {
-    if (!isEditing && onClick) onClick();
+    if (onClick) onClick();
   };
 
   // --- PROGRESS LOGIC ---

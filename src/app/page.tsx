@@ -12,6 +12,7 @@ import FlexBucket from '@/components/dashboard/FlexBucket';
 import TaskCircle from '@/components/dashboard/TaskCircle';
 import DashboardNavbar from '@/components/dashboard/DashboardNavbar';
 import DashboardHeader from '@/components/dashboard/DashboardHeader';
+import TaskEditorModal from '@/components/dashboard/TaskEditorModal';
 
 // Hooks & Utils
 import { useDashboard } from '@/hooks/useDashboard';
@@ -35,12 +36,29 @@ export default function Dashboard() {
   // --- RENDERING ---
   return (
     <main className="h-full w-full bg-slate-50 text-slate-900 font-sans relative overflow-hidden flex flex-col">
+      {/* ... Header ... */}
       <DashboardHeader 
         hasSchedule={state.hasSchedule} isPast={false} 
         isEditing={state.isEditing} isEditingActions={state.isEditingActions} 
         onFinishEdit={() => { actions.setIsEditing(false); actions.setIsEditingActions(false); }} 
       />
-
+      
+      {/* --- RENDER MODAL --- */}
+      <TaskEditorModal 
+        isOpen={state.modalConfig.isOpen}
+        mode={state.modalConfig.mode}
+        type={state.modalConfig.type}
+        initialData={state.modalConfig.initialData}
+        minTime={state.modalConfig.minTime}
+        maxTime={state.modalConfig.maxTime}
+        onClose={actions.closeModal}
+        onSave={actions.saveTask}
+        onDelete={() => {
+           if (state.modalConfig.initialData?.id) {
+             actions.deleteTask(state.modalConfig.initialData.id, state.modalConfig.type === 'daily');
+           }
+        }}
+      />
       <div className="scroller flex-1 overflow-y-auto overflow-x-hidden no-scrollbar">
         <div className="min-h-[101%] pb-48"> 
             
@@ -95,6 +113,10 @@ export default function Dashboard() {
                             const startTime = parts[0] ? parts[0].trim() : "";
                             const isFirstStarted = firstTask ? helpers.isTimeInPast(startTime) : false;
                             
+                            // GAP CHECK: Check-in (07:00) vs First Task Start
+                            // If first task starts at 07:00, then NO GAP -> Hide Button
+                            const isGapless = startTime === "07:00";
+
                             return (
                                 <TaskRow 
                                     id="check-in" 
@@ -103,7 +125,8 @@ export default function Dashboard() {
                                     progress={100} status="completed" category="CONSISTENCY" icon={Sun} variant="marker"
                                     isLast={false} isEditing={state.isEditing}
                                     isInsertionPointPast={isFirstStarted}
-                                    onInsert={() => actions.insertTask(-1)}
+                                    isGapless={isGapless} // NEW
+                                    onInsert={() => actions.openAddSchedule(-1)} // Index -1 for start
                                 />
                             );
                         })()}
@@ -117,10 +140,19 @@ export default function Dashboard() {
                           // Insertion Rule: Block if NEXT task has already started
                           const nextTask = state.scheduleTasks[index + 1];
                           let isInsertionBlocked = false;
+                          let isGapless = false; // Default: gap exists
                           if (nextTask) {
-                             const parts = nextTask.timeRange.split('-');
-                             const start = parts[0] ? parts[0].trim() : "";
-                             if (helpers.isTimeInPast(start)) isInsertionBlocked = true;
+                             const nextParts = nextTask.timeRange.split('-');
+                             const nextStart = nextParts[0] ? nextParts[0].trim() : "";
+                             
+                             // 1. Check if next task started in past
+                             if (helpers.isTimeInPast(nextStart)) isInsertionBlocked = true;
+
+                             // 2. GAP CHECK: Current End vs Next Start
+                             const currParts = task.timeRange.split('-');
+                             const currEnd = currParts[1] ? currParts[1].trim() : "";
+                             
+                             if (currEnd === nextStart) isGapless = true;
                           }
 
                           return (
@@ -130,8 +162,10 @@ export default function Dashboard() {
                                 progress={Math.min(progressPct, 100)} 
                                 isLast={false} isEditing={state.isEditing} isLocked={isTaskLocked}
                                 isInsertionPointPast={isInsertionBlocked}
+                                isGapless={isGapless} // NEW
                                 onDelete={() => actions.deleteTask(task.id, false)} 
-                                onInsert={() => actions.insertTask(index)}
+                                onInsert={() => actions.openAddSchedule(index)}
+                                onEditClick={() => actions.openEditTask(task)} // Opens modal on click in edit mode
                                 onToggleComplete={() => actions.toggleComplete(task.id, false)}
                               />
                             </div>
@@ -172,18 +206,42 @@ export default function Dashboard() {
                         const rawProgress = totalSecs > 0 ? (action.elapsedSeconds / totalSecs) * 100 : 0;
                         return (
                           <TaskCircle 
-                            key={action.id} title={action.title} duration={action.timeRange} Icon={action.icon} category={action.category} 
-                            progress={Math.min(rawProgress, 100)} isActive={action.status === 'in_progress'} onClick={() => actions.toggleTask(action.id, true)}
-                            isEditing={state.isEditingActions} onDelete={() => actions.deleteTask(action.id, true)}
-                            // Drag props simplified for brevity, assume passed correctly
-                            onDragStart={() => handleDragStart(index)} onDragOver={(e) => handleDragOver(e, index)} onDrop={handleDrop}
-                            isCompleted={action.status === 'completed'} onLongPress={() => actions.toggleComplete(action.id, true)}
+                            key={action.id} 
+                            title={action.title} 
+                            duration={action.timeRange} 
+                            Icon={action.icon} 
+                            category={action.category} 
+                            progress={Math.min(rawProgress, 100)} 
+                            isActive={action.status === 'in_progress'} 
+                            
+                            // --- UPDATED CLICK HANDLER ---
+                            onClick={() => {
+                              // 1. If Completed -> Do nothing (Locked for both Edit and Toggle)
+                              if (action.status === 'completed') return;
+
+                              // 2. If Edit Mode -> Open Modal
+                              if (state.isEditingActions) {
+                                actions.openEditTask(action);
+                              } 
+                              // 3. If View Mode -> Toggle Timer
+                              else {
+                                actions.toggleTask(action.id, true);
+                              }
+                            }}
+                            
+                            isEditing={state.isEditingActions} 
+                            onDelete={() => actions.deleteTask(action.id, true)}
+                            onDragStart={() => handleDragStart(index)} 
+                            onDragOver={(e) => handleDragOver(e, index)} 
+                            onDrop={handleDrop}
+                            isCompleted={action.status === 'completed'} 
+                            onLongPress={() => actions.toggleComplete(action.id, true)}
                           />
                         );
                       })}
                       
                       {state.isEditingActions && (
-                        <div onClick={actions.addDailyAction} className="flex flex-col items-center gap-3 cursor-pointer active:scale-95 transition-transform">
+                        <div onClick={actions.openAddDaily} className="flex flex-col items-center gap-3 cursor-pointer active:scale-95 transition-transform">
                           <div className="w-16 h-16 rounded-3xl bg-white border-2 border-dashed border-slate-300 flex items-center justify-center text-slate-300 hover:text-indigo-500 hover:border-indigo-200 transition-all shadow-sm"><Plus size={24} /></div>
                           <p className="text-xs font-bold text-slate-300">Add New</p>
                         </div>
