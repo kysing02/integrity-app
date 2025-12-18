@@ -1,35 +1,34 @@
-import { TaskItem } from "@/types/dashboard";
+import { TaskItem } from '@/types/dashboard';
 
-// --- Helper: Get Date Object for Today at specific time ---
-// NEW HELPER needed for the math
 export const getTodayDateAtTime = (timeStr: string): Date => {
+  // FIX: Safety check for undefined/empty strings
+  if (!timeStr) return new Date(); 
+
   const [hours, minutes] = timeStr.split(/[:h]/).map(str => parseInt(str) || 0);
   const date = new Date();
   date.setHours(hours, minutes, 0, 0);
   return date;
 };
 
-// --- Helper: Calculate Future Work Load ---
-// NEW HELPER to sum up only the work that hasn't happened yet
 export const getTaskRemainingSeconds = (task: TaskItem, now: Date): number => {
-  // Completed tasks consume 0 future capacity
   if (task.status === 'completed') return 0;
 
-  // 1. Daily Actions (Simple Duration - Elapsed)
   if (task.isDaily) {
     const totalSeconds = parseDurationToSeconds(task.timeRange);
     return Math.max(0, totalSeconds - task.elapsedSeconds);
   }
 
-  // 2. Scheduled Tasks (Time Block - Time already passed)
-  if (task.timeRange.includes(' - ')) {
-    const [startStr, endStr] = task.timeRange.split(' - ');
+  // Robust check for range
+  if (task.timeRange.includes('-')) {
+    const parts = task.timeRange.split('-');
+    // Handle "09:00 - 11:30" and "09:00-11:30"
+    const startStr = parts[0].trim();
+    const endStr = parts[1] ? parts[1].trim() : startStr; // Fallback if split fails
+
     const end = getTodayDateAtTime(endStr);
     
-    // If task is already over, it consumes 0 future capacity
     if (now >= end) return 0;
 
-    // We only count the time from NOW (or Start) until End
     const start = getTodayDateAtTime(startStr);
     const effectiveStart = now > start ? now : start;
     
@@ -39,16 +38,19 @@ export const getTaskRemainingSeconds = (task: TaskItem, now: Date): number => {
   return 0;
 };
 
-// --- Helper: Parse Time Strings ---
 export const parseDurationToSeconds = (timeStr: string): number => {
-  // ... (Your existing parseDurationToSeconds logic) ...
-  // (Keep this exactly as you had it)
-  if (timeStr.includes(' - ')) {
-    const [start, end] = timeStr.split(' - ');
+  if (!timeStr) return 0; // Safety check
+
+  if (timeStr.includes('-')) {
+    const parts = timeStr.split('-');
+    const start = parts[0].trim();
+    const end = parts[1] ? parts[1].trim() : start;
+
     const [sH, sM] = start.split(':').map(Number);
     const [eH, eM] = end.split(':').map(Number);
     return ((eH * 60 + eM) - (sH * 60 + sM)) * 60;
   }
+  
   let total = 0;
   const hours = timeStr.match(/(\d+)h/);
   const minutes = timeStr.match(/(\d+)m/);

@@ -17,6 +17,9 @@ interface TaskRowProps {
   isLocked?: boolean; 
   isCurrentTimeSlot?: boolean; 
   
+  // NEW: Time Constraints
+  isInsertionPointPast?: boolean; // Hides the (+) button if true
+  
   onDelete?: () => void;
   onInsert?: () => void;
   onEditClick?: () => void;
@@ -26,20 +29,18 @@ interface TaskRowProps {
 const TaskRow = ({ 
   title, timeRange, progress, status, category = 'CONSISTENCY', isLast, icon: Icon,
   variant = 'task',
-  isEditing, isLocked, isCurrentTimeSlot, onDelete, onInsert, onEditClick, onToggleComplete
+  isEditing, isLocked, isCurrentTimeSlot, isInsertionPointPast, // NEW prop
+  onDelete, onInsert, onEditClick, onToggleComplete
 }: TaskRowProps) => {
   
   const isMarker = variant === 'marker';
   const isEditable = isEditing && !isLocked && !isMarker;
   const isCompleted = status === 'completed';
 
-  // --- 1. COLOR LOGIC ---
+  // --- COLOR LOGIC ---
   let ringColor = 'text-slate-200';
   let iconColor = 'text-slate-300';
   let dotColor = 'bg-slate-300';
-  
-  // NEW: Checkmark Color Logic
-  // Consistency = Indigo Tick, Efficiency = Emerald Tick
   const checkColor = category === 'CONSISTENCY' ? 'text-indigo-600' : 'text-emerald-600';
   const hoverCheckColor = category === 'CONSISTENCY' ? 'text-indigo-400' : 'text-emerald-400';
 
@@ -65,18 +66,13 @@ const TaskRow = ({
     iconColor = 'text-indigo-500';
   }
 
-  // --- 2. PROGRESS LOGIC ---
+  // --- PROGRESS LOGIC ---
   let finalProgress = progress;
-  if (category === 'EFFICIENCY') {
-    finalProgress = 100;
-  } else {
-    finalProgress = progress;
-  }
-
+  if (category === 'EFFICIENCY') finalProgress = 100;
   if (isMarker) finalProgress = 100; 
   if (isEditable) finalProgress = 100;
 
-  // --- 3. CONTAINER STYLES ---
+  // --- STYLES ---
   const containerClass = isMarker 
     ? 'opacity-60' 
     : (isCompleted || (isEditing && isLocked) ? 'opacity-70 grayscale-[0.1]' : 'opacity-100');
@@ -92,10 +88,15 @@ const TaskRow = ({
   return (
     <div className={`flex gap-4 relative transition-all duration-300 ${containerClass}`}>
       
-      {/* Connection Line */}
+      {/* CONNECTION LINE & INSERT BUTTON */}
       {!isLast && (
         <div className="absolute left-[23px] top-[50px] bottom-0 w-0.5 bg-slate-100 flex flex-col items-center justify-center">
-           {isEditing && !isLocked && !isMarker && (
+           {/* Logic Update:
+              1. Show (+) if isEditing is true.
+              2. Show (+) even if isLocked (Completed).
+              3. HIDE (+) if isInsertionPointPast is true (User Logic 4d).
+           */}
+           {isEditing && !isInsertionPointPast && (
              <button 
                 onClick={onInsert}
                 className="w-5 h-5 rounded-full bg-indigo-100 border-2 border-white text-indigo-600 flex items-center justify-center shadow-sm z-20 hover:scale-110 transition-transform"
@@ -106,7 +107,7 @@ const TaskRow = ({
         </div>
       )}
       
-      {/* Left Column: Icon Circle */}
+      {/* LEFT COLUMN */}
       <button 
         onClick={(e) => {
           e.stopPropagation(); 
@@ -132,12 +133,11 @@ const TaskRow = ({
          </div>
       </button>
 
-      {/* Right Column: Card */}
+      {/* RIGHT COLUMN */}
       <div className={`flex-grow mb-6 ${!isMarker && 'group'} cursor-pointer`} onClick={isEditable ? onEditClick : undefined}>
         <div className={cardClass}>
           <div className="flex justify-between items-center">
             
-            {/* Title & Time */}
             <div>
               <div className="flex items-center gap-2 mb-1">
                 <span className={`text-[10px] font-bold ${isMarker ? 'text-slate-400 italic' : 'text-slate-500'}`}>{timeRange}</span>
@@ -152,16 +152,18 @@ const TaskRow = ({
               </p>
             </div>
             
-            {/* Action Buttons */}
             {!isMarker && (
               <div className="flex gap-3 items-center">
                 {isEditing ? (
-                  isLocked ? null : (
-                    <button onClick={(e) => { e.stopPropagation(); onDelete?.(); }} className="w-8 h-8 rounded-full bg-rose-50 text-rose-500 hover:bg-rose-100 flex items-center justify-center transition-colors">
-                      <X size={16} />
-                    </button>
-                  )
+                  // EDIT MODE: Always allow delete (User Logic 1)
+                  <button 
+                    onClick={(e) => { e.stopPropagation(); onDelete?.(); }}
+                    className="w-8 h-8 rounded-full bg-rose-50 text-rose-500 hover:bg-rose-100 flex items-center justify-center transition-colors"
+                  >
+                    <X size={16} />
+                  </button>
                 ) : (
+                  // VIEW MODE
                   <>
                     {status === 'in_progress' ? (
                       <div className="w-8 h-8 rounded-full bg-white flex items-center justify-center shadow-sm">
@@ -173,7 +175,6 @@ const TaskRow = ({
                       </div>
                     ) : status === 'completed' ? (
                       <div className="w-8 h-8 rounded-full bg-slate-100 text-slate-400 flex items-center justify-center">
-                        {/* Use the same checkColor logic here too for consistency if desired, or keep generic slate for the button */}
                         <CheckCircle2 size={16} />
                       </div>
                     ) : (
