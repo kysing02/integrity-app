@@ -48,15 +48,24 @@ const TaskCircle = ({
     if (!isEditing && onClick) onClick();
   };
 
-  // --- PROGRESS VISUAL LOGIC ---
-  // EFFICIENCY: Always 100% (Binary: Do it or don't)
-  // CONSISTENCY: Use actual progress (Analog: How much did I do?)
+  // --- PROGRESS LOGIC ---
   const finalProgress = category === 'EFFICIENCY' ? 100 : progress;
 
-  // Colors
+  // --- COLOR LOGIC ---
   const themeColor = category === 'EFFICIENCY' ? 'text-emerald-500' : 'text-indigo-500';
-  const ringColor = isCompleted ? 'text-emerald-400' : (category === 'EFFICIENCY' ? 'text-emerald-400' : 'text-indigo-400');
-  const bgClass = isCompleted ? 'bg-emerald-50' : (category === 'EFFICIENCY' ? 'bg-emerald-50' : 'bg-indigo-50');
+  
+  // Ring Color: If completed, match the category check color
+  // Efficiency = Green Ring, Consistency = Indigo Ring (when completed)
+  const ringColor = isCompleted 
+    ? (category === 'EFFICIENCY' ? 'text-emerald-400' : 'text-indigo-400')
+    : (category === 'EFFICIENCY' ? 'text-emerald-400' : 'text-indigo-400');
+    
+  const bgClass = isCompleted 
+    ? (category === 'EFFICIENCY' ? 'bg-emerald-50' : 'bg-indigo-50')
+    : (category === 'EFFICIENCY' ? 'bg-emerald-50' : 'bg-indigo-50');
+
+  // Check Icon Color
+  const checkColor = category === 'EFFICIENCY' ? 'text-emerald-600' : 'text-indigo-600';
 
   // SVG Math
   const radius = 28; 
@@ -97,7 +106,7 @@ const TaskCircle = ({
         </svg>
 
         {isCompleted ? (
-           <Check size={24} className={isActive ? 'text-white' : 'text-emerald-600'} strokeWidth={3} />
+           <Check size={24} className={isActive ? 'text-white' : checkColor} strokeWidth={3} />
         ) : (
            <Icon size={24} className={`relative z-10 ${isActive ? 'text-white' : 'text-slate-700'}`} />
         )}

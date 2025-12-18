@@ -13,14 +13,13 @@ import DashboardNavbar from '@/components/dashboard/DashboardNavbar';
 import DashboardHeader from '@/components/dashboard/DashboardHeader';
 
 import { TaskItem } from '@/types/dashboard';
-import { parseDurationToSeconds, getTaskRemainingSeconds } from '@/lib/timeUtils';
+import { parseDurationToSeconds, getTaskRemainingSeconds, getTodayDateAtTime } from '@/lib/timeUtils';
 
 // --- DEBUG CONFIG ---
 const DEBUG_TIME = "08:00"; 
 
 // --- INITIAL DATA ---
 const INITIAL_SCHEDULE: TaskItem[] = [
-  // UPDATED: Shortened for debug
   { id: 's2', title: "Deep Work", timeRange: "09:00 - 09:01", score: 0, status: "pending", category: "CONSISTENCY", icon: Brain, elapsedSeconds: 0 },
   { id: 's3', title: "Strategy Meeting", timeRange: "13:00 - 14:00", score: 0, status: "pending", category: "EFFICIENCY", icon: Users, elapsedSeconds: 0 },
   { id: 's4', title: "Fitness", timeRange: "17:30 - 18:00", score: 0, status: "pending", category: "CONSISTENCY", icon: Dumbbell, elapsedSeconds: 0 },
@@ -82,16 +81,8 @@ export default function Dashboard() {
       // 2. Calculate Flex Capacity
       if (dayStatus === 'active') {
         const midnight = new Date();
-        midnight.setHours(24, 0, 0, 0); // Logic assumes today
+        midnight.setHours(24, 0, 0, 0);
         
-        // If debug time is set, ensure 'midnight' is relative to that mock day
-        if (DEBUG_TIME) {
-            const [h, m] = DEBUG_TIME.split(':').map(Number);
-            // If now is 08:00, midnight is 16 hours away
-        }
-
-        const secondsLeftInDay = (midnight.getTime() - new Date().setHours(24,0,0,0) + (24*3600*1000 - (now.getHours()*3600+now.getMinutes()*60)*1000)) / 1000;
-        // Simplified: (Seconds in Day) - (Seconds passed since midnight)
         const secondsSinceMidnight = now.getHours() * 3600 + now.getMinutes() * 60 + now.getSeconds();
         const timeLeft = (24 * 3600) - secondsSinceMidnight;
 
@@ -107,7 +98,7 @@ export default function Dashboard() {
   // --- HANDLERS ---
   const handleStartDay = () => {
     setDayStatus('active');
-    setCheckInTime(getNow()); // Record the "Debug" time as start time
+    setCheckInTime(getNow());
   };
 
   const handleEndDay = () => {
@@ -142,7 +133,7 @@ export default function Dashboard() {
     else setScheduleTasks(prev => toggleList(prev));
   };
 
-  // ... (Other CRUD handlers same as before)
+  // CRUD Handlers
   const handleDeleteTask = (id: string) => setScheduleTasks(prev => prev.filter(t => t.id !== id));
   const handleInsertTask = (index: number) => {
     const newTask: TaskItem = { id: Math.random().toString(), title: "New Task", timeRange: "--:--", score: 0, status: 'pending', category: 'CONSISTENCY', icon: Brain, elapsedSeconds: 0 };
@@ -163,13 +154,73 @@ export default function Dashboard() {
   const handleDrop = () => setDraggedItemIndex(null);
 
   // --- UI VALUES ---
+  
+  // Dynamic Pill State Calculation
   const pillState = (() => {
     if (dayStatus === 'sleeping') return { text: "Ready for your day?", color: "text-slate-500 border-slate-200 bg-white" };
     if (dayStatus === 'completed') return { text: "Day Completed", color: "text-emerald-600 border-emerald-200 bg-emerald-50" };
-    if (hasSchedule) return { text: "Next: Meeting in 45m", color: "text-indigo-500 border-indigo-100 bg-white" };
-    return { text: "Status: Not Planned", color: "text-amber-500 border-amber-100 bg-amber-50" };
-  })();
+    if (!hasSchedule) return { text: "Status: Not Planned", color: "text-amber-500 border-amber-100 bg-amber-50" };
 
+    const now = getNow();
+    let currentTask: TaskItem | null = null;
+    let nextTask: TaskItem | null = null;
+    let minDiff = Infinity;
+
+    // Filter range-based scheduled tasks
+    const timedTasks = scheduleTasks.filter(t => t.timeRange.includes('-'));
+
+    for (const task of timedTasks) {
+      const [startStr, endStr] = task.timeRange.split(' - ');
+      const start = getTodayDateAtTime(startStr);
+      const end = getTodayDateAtTime(endStr);
+      
+      // Align date part to 'now' (crucial for debug consistency)
+      start.setFullYear(now.getFullYear(), now.getMonth(), now.getDate());
+      end.setFullYear(now.getFullYear(), now.getMonth(), now.getDate());
+
+      // 1. Current Task Logic: We are physically inside this time slot
+      if (now >= start && now < end) {
+        currentTask = task;
+        // We break here because "Now" takes precedence over "Next"
+        break; 
+      }
+
+      // 2. Next Task Logic:
+      // Check if task is in FUTURE AND NOT COMPLETED
+      // If you deleted the task, it won't exist in 'timedTasks', so it's handled automatically.
+      if (now < start && task.status !== 'completed') {
+        const diff = start.getTime() - now.getTime();
+        if (diff < minDiff) {
+          minDiff = diff;
+          nextTask = task;
+        }
+      }
+    }
+
+    // SCENARIO 1: We are in a task right now
+    if (currentTask) {
+       // Optional: You could check currentTask.status here too. 
+       // If completed, maybe show "Free Time (Finished Early)"? 
+       // For now, "Now: [Title]" is safest.
+       return { text: `Now: ${currentTask.title}`, color: "text-emerald-600 border-emerald-200 bg-white" };
+    }
+
+    // SCENARIO 2: We found a valid upcoming task
+    if (nextTask) {
+       const diffMins = Math.ceil(minDiff / (1000 * 60));
+       const hrs = Math.floor(diffMins / 60);
+       const mins = diffMins % 60;
+       
+       let timeStr = "";
+       if (hrs > 0) timeStr += `${hrs}h `;
+       if (mins > 0 || hrs === 0) timeStr += `${mins}m`;
+       
+       return { text: `Next: ${nextTask.title} in ${timeStr.trim()}`, color: "text-indigo-500 border-indigo-100 bg-white" };
+    }
+
+    // SCENARIO 3: No future tasks pending
+    return { text: "No pending tasks", color: "text-slate-400 border-slate-200 bg-slate-50" };
+  })();
   const formatCheckInTime = (date: Date | null) => date ? date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : "--:--";
 
   return (
@@ -190,13 +241,12 @@ export default function Dashboard() {
               <span>{pillState.text}</span>
             </div>
 
-            {/* TIMELINE RIBBON */}
             <TimelineRibbon 
               showCurrentTime={dayStatus === 'active'} 
               tasks={scheduleTasks} 
               plannedCheckIn="07:00"
               plannedSleep="23:00"
-              debugTime={DEBUG_TIME} // Pass debug time
+              debugTime={DEBUG_TIME}
             />
 
             <div className="px-6 mt-4">
@@ -218,7 +268,6 @@ export default function Dashboard() {
                    </button>
                 </div>
               ) : (
-                /* --- ACTIVE DAY CONTENT --- */
                 <>
                   <section className="mb-10 animate-in fade-in duration-500">
                     <div className="flex justify-between items-end mb-6 border-b border-slate-100 pb-2">
@@ -238,7 +287,7 @@ export default function Dashboard() {
                           id="check-in" 
                           title={`Checked-in at ${formatCheckInTime(checkInTime)}`} 
                           timeRange="07:00" 
-                          progress={100} score={0} status="completed" category="CONSISTENCY" icon={Sun} variant="marker"
+                          progress={100} status="completed" category="CONSISTENCY" icon={Sun} variant="marker"
                           isLast={false}
                         />
 
@@ -252,7 +301,7 @@ export default function Dashboard() {
                             <div key={task.id} onClick={() => !isEditing && task.status !== 'completed' && handleToggleTask(task.id, false)}>
                               <TaskRow 
                                 id={task.id} title={task.title} timeRange={task.timeRange} status={task.status} category={task.category} icon={task.icon} 
-                                score={0} progress={Math.min(progressPct, 100)} 
+                                progress={Math.min(progressPct, 100)} 
                                 isLast={false} 
                                 isEditing={isEditing} isLocked={isTaskLocked}
                                 onDelete={() => handleDeleteTask(task.id)} onInsert={() => handleInsertTask(index)}
@@ -295,7 +344,10 @@ export default function Dashboard() {
                     </div>
 
                     <div className="-mx-6 mb-4"> 
-                      <FlexBucket totalVolumeSeconds={totalVolumeSeconds} flexCapacitySeconds={flexCapacitySeconds} />
+                      <FlexBucket 
+                        totalVolumeSeconds={totalVolumeSeconds} 
+                        flexCapacitySeconds={flexCapacitySeconds}
+                      />
                     </div>
                     
                     <div className="grid grid-cols-4 gap-4">
@@ -312,6 +364,7 @@ export default function Dashboard() {
                           />
                         );
                       })}
+                      
                       {isEditingActions && (
                         <div onClick={handleAddDailyAction} className="flex flex-col items-center gap-3 cursor-pointer active:scale-95 transition-transform">
                           <div className="w-16 h-16 rounded-3xl bg-white border-2 border-dashed border-slate-300 flex items-center justify-center text-slate-300 hover:text-indigo-500 hover:border-indigo-200 transition-all shadow-sm"><Plus size={24} /></div>

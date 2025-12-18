@@ -37,22 +37,24 @@ const TaskRow = ({
   let ringColor = 'text-slate-200';
   let iconColor = 'text-slate-300';
   let dotColor = 'bg-slate-300';
+  
+  // NEW: Checkmark Color Logic
+  // Consistency = Indigo Tick, Efficiency = Emerald Tick
+  const checkColor = category === 'CONSISTENCY' ? 'text-indigo-600' : 'text-emerald-600';
+  const hoverCheckColor = category === 'CONSISTENCY' ? 'text-indigo-400' : 'text-emerald-400';
 
   if (!isMarker) {
     if (status === 'pending') {
-       // Pending Efficiency = Grey Full Ring
-       // Pending Consistency = Grey Empty Ring
        ringColor = isCurrentTimeSlot ? 'text-emerald-500' : 'text-slate-200';
        iconColor = isCurrentTimeSlot ? 'text-emerald-600' : 'text-slate-300';
     } else {
-       // Active or Completed
        const isEfficiency = category === 'EFFICIENCY';
        ringColor = isEfficiency ? 'text-emerald-500' : 'text-indigo-500';
        iconColor = isEfficiency ? 'text-emerald-600' : 'text-indigo-600';
     }
     dotColor = category === 'CONSISTENCY' ? 'bg-indigo-400' : 'bg-emerald-400';
   } else {
-    // MARKER COLORS
+    // Marker Colors
     ringColor = 'text-slate-200'; 
     iconColor = 'text-slate-300';
     dotColor = 'bg-slate-200';
@@ -63,25 +65,18 @@ const TaskRow = ({
     iconColor = 'text-indigo-500';
   }
 
-  // --- 2. PROGRESS LOGIC (CRITICAL CHANGE) ---
+  // --- 2. PROGRESS LOGIC ---
   let finalProgress = progress;
-
   if (category === 'EFFICIENCY') {
-    // BINARY: Efficiency tasks always show 100% ring (representing the "Whole Unit")
-    // The state (Pending/Done) is shown via Color, not Ring Length.
     finalProgress = 100;
   } else {
-    // ANALOG: Consistency tasks show actual recorded progress.
-    // We DO NOT force 100% on completion. We show what was recorded.
     finalProgress = progress;
   }
 
-  // Visual Overrides
   if (isMarker) finalProgress = 100; 
   if (isEditable) finalProgress = 100;
 
   // --- 3. CONTAINER STYLES ---
-  // Adjusted grayscale to be lighter so we can see the Green/Purple on completed items
   const containerClass = isMarker 
     ? 'opacity-60' 
     : (isCompleted || (isEditing && isLocked) ? 'opacity-70 grayscale-[0.1]' : 'opacity-100');
@@ -123,7 +118,7 @@ const TaskRow = ({
          <div className="relative">
            <ProgressCircle size={48} progress={finalProgress} color={ringColor}>
               {isCompleted && !isEditing && !isMarker ? (
-                 <Check size={20} className="text-emerald-600" strokeWidth={3} />
+                 <Check size={20} className={checkColor} strokeWidth={3} />
               ) : (
                  <Icon size={20} className={`${iconColor} ${!isMarker && !isCompleted ? 'group-hover/circle:opacity-0' : ''} transition-opacity`} />
               )}
@@ -131,7 +126,7 @@ const TaskRow = ({
            
            {!isCompleted && !isEditing && !isMarker && (
              <div className="absolute inset-0 flex items-center justify-center opacity-0 group-hover/circle:opacity-100 transition-opacity">
-                <Check size={20} className="text-emerald-400" />
+                <Check size={20} className={hoverCheckColor} />
              </div>
            )}
          </div>
@@ -178,6 +173,7 @@ const TaskRow = ({
                       </div>
                     ) : status === 'completed' ? (
                       <div className="w-8 h-8 rounded-full bg-slate-100 text-slate-400 flex items-center justify-center">
+                        {/* Use the same checkColor logic here too for consistency if desired, or keep generic slate for the button */}
                         <CheckCircle2 size={16} />
                       </div>
                     ) : (
