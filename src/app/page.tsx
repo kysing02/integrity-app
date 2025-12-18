@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import TimelineRibbon from '@/components/dashboard/TimelineRibbon';
 import TaskRow from '@/components/dashboard/TaskRow';
 import FlexBucket from '@/components/dashboard/FlexBucket';
@@ -18,22 +18,41 @@ interface TaskItem {
   status: 'pending' | 'in_progress' | 'completed';
   category: 'EFFICIENCY' | 'CONSISTENCY';
   icon: any;
-  isDaily?: boolean; 
+  isDaily?: boolean;
+  elapsedSeconds: number; // NEW: Track real time
 }
+
+// --- Helper: Parse Time Strings to Seconds ---
+const parseDurationToSeconds = (timeStr: string): number => {
+  // Case 1: "09:00 - 11:30" (Schedule Range)
+  if (timeStr.includes(' - ')) {
+    const [start, end] = timeStr.split(' - ');
+    const [sH, sM] = start.split(':').map(Number);
+    const [eH, eM] = end.split(':').map(Number);
+    return ((eH * 60 + eM) - (sH * 60 + sM)) * 60;
+  }
+  // Case 2: "1h 30m" or "45m" (Daily Duration)
+  let total = 0;
+  const hours = timeStr.match(/(\d+)h/);
+  const minutes = timeStr.match(/(\d+)m/);
+  if (hours) total += parseInt(hours[1]) * 3600;
+  if (minutes) total += parseInt(minutes[1]) * 60;
+  return total > 0 ? total : 0; // Return 0 for single points like "07:00"
+};
 
 // --- Initial Data ---
 const INITIAL_SCHEDULE: TaskItem[] = [
-  { id: 's1', title: "Wake Up", timeRange: "07:00", score: 100, status: "completed", category: "CONSISTENCY", icon: Sun },
-  { id: 's2', title: "Deep Work", timeRange: "09:00 - 11:30", score: 96, status: "completed", category: "CONSISTENCY", icon: Brain },
-  { id: 's3', title: "Strategy Meeting", timeRange: "13:00 - 14:00", score: 98, status: "in_progress", category: "EFFICIENCY", icon: Users },
-  { id: 's4', title: "Fitness", timeRange: "17:30 - 18:30", score: 0, status: "pending", category: "CONSISTENCY", icon: Dumbbell },
-  { id: 's5', title: "Sleep", timeRange: "23:00", score: 0, status: "pending", category: "CONSISTENCY", icon: Moon }
+  { id: 's1', title: "Wake Up", timeRange: "07:00", score: 100, status: "completed", category: "CONSISTENCY", icon: Sun, elapsedSeconds: 0 },
+  { id: 's2', title: "Deep Work", timeRange: "09:00 - 11:30", score: 96, status: "completed", category: "CONSISTENCY", icon: Brain, elapsedSeconds: 9000 }, // Example: Completed full time
+  { id: 's3', title: "Strategy Meeting", timeRange: "13:00 - 14:00", score: 98, status: "in_progress", category: "EFFICIENCY", icon: Users, elapsedSeconds: 600 }, // 10 mins in
+  { id: 's4', title: "Fitness", timeRange: "17:30 - 18:30", score: 0, status: "pending", category: "CONSISTENCY", icon: Dumbbell, elapsedSeconds: 0 },
+  { id: 's5', title: "Sleep", timeRange: "23:00", score: 0, status: "pending", category: "CONSISTENCY", icon: Moon, elapsedSeconds: 0 }
 ];
 
 const INITIAL_DAILY: TaskItem[] = [
-  { id: 'd1', title: "Study", timeRange: "1h 30m", score: 0, status: 'pending', category: 'CONSISTENCY', icon: Pencil, isDaily: true },
-  { id: 'd2', title: "Read", timeRange: "45m", score: 0, status: 'pending', category: 'CONSISTENCY', icon: BookOpen, isDaily: true },
-  { id: 'd3', title: "Tidy Room", timeRange: "30m", score: 0, status: 'pending', category: 'EFFICIENCY', icon: Brush, isDaily: true },
+  { id: 'd1', title: "Study", timeRange: "1h 30m", score: 45, status: 'pending', category: 'CONSISTENCY', icon: Pencil, isDaily: true, elapsedSeconds: 2700 }, // 45 mins done
+  { id: 'd2', title: "Read", timeRange: "45m", score: 20, status: 'pending', category: 'CONSISTENCY', icon: BookOpen, isDaily: true, elapsedSeconds: 540 }, // 9 mins done
+  { id: 'd3', title: "Tidy Room", timeRange: "30m", score: 0, status: 'pending', category: 'EFFICIENCY', icon: Brush, isDaily: true, elapsedSeconds: 0 },
 ];
 
 export default function Dashboard() {
@@ -54,6 +73,33 @@ export default function Dashboard() {
   // MOCK TIMER DATA (We will make this real in the next step)
   const hours = 1; 
   const minutes = 12;
+
+  // --- TIMER ENGINE ---
+  useEffect(() => {
+    let interval: NodeJS.Timeout;
+
+    if (activeTask) {
+      interval = setInterval(() => {
+        const isDaily = activeTask.isDaily;
+        
+        // Function to update the specific list
+        const updateList = (list: TaskItem[]) => list.map(t => {
+          if (t.id === activeTask.id) {
+            return { ...t, elapsedSeconds: t.elapsedSeconds + 1 };
+          }
+          return t;
+        });
+
+        if (isDaily) {
+          setDailyActions(prev => updateList(prev));
+        } else {
+          setScheduleTasks(prev => updateList(prev));
+        }
+      }, 1000);
+    }
+
+    return () => clearInterval(interval);
+  }, [activeTask]); // Re-run when active task changes
 
   // --- Handlers ---
 
@@ -81,8 +127,8 @@ export default function Dashboard() {
 
   const handleBuildSchedule = () => {
     setScheduleTasks([
-      { id: 's1', title: "Wake Up", timeRange: "07:00", score: 0, status: "pending", category: "CONSISTENCY", icon: Sun },
-      { id: 's99', title: "Sleep", timeRange: "23:00", score: 0, status: "pending", category: "CONSISTENCY", icon: Moon }
+      { id: 's1', title: "Wake Up", timeRange: "07:00", score: 0, status: "pending", category: "CONSISTENCY", icon: Sun, elapsedSeconds: 0 },
+      { id: 's99', title: "Sleep", timeRange: "23:00", score: 0, status: "pending", category: "CONSISTENCY", icon: Moon, elapsedSeconds: 0 }
     ]);
     setHasSchedule(true);
     setIsEditing(true); 
@@ -102,7 +148,8 @@ export default function Dashboard() {
       score: 0,
       status: 'pending',
       category: 'CONSISTENCY',
-      icon: Brain
+      icon: Brain,
+      elapsedSeconds: 0 // Init
     };
     const newTasks = [...scheduleTasks];
     newTasks.splice(index + 1, 0, newTask);
@@ -119,8 +166,9 @@ export default function Dashboard() {
       score: 0,
       status: 'pending',
       category: 'EFFICIENCY',
-      icon: Sparkles, // Template Icon
-      isDaily: true
+      icon: Sparkles,
+      isDaily: true,
+      elapsedSeconds: 0 // Init
     };
     setDailyActions([...dailyActions, newAction]);
   };
@@ -158,6 +206,18 @@ export default function Dashboard() {
   };
 
   const pillState = getPillState();
+
+  // --- ORB DATA CALCULATION ---
+  const activeTotalSeconds = activeTask ? parseDurationToSeconds(activeTask.timeRange) : 0;
+  const activeElapsed = activeTask ? activeTask.elapsedSeconds : 0;
+  
+  // Calculate Hours, Minutes, Seconds for Orb Display
+  const orbHours = Math.floor(activeElapsed / 3600);
+  const orbMinutes = Math.floor((activeElapsed % 3600) / 60);
+  const orbSeconds = activeElapsed % 60; // NEW: Calculate seconds
+  
+  // Calculate Progress Percentage for Orb Ring
+  const orbProgress = activeTotalSeconds > 0 ? (activeElapsed / activeTotalSeconds) * 213 : 0; // 213 is strokeDasharray
 
   return (
     <main className="h-full w-full bg-slate-50 text-slate-900 font-sans relative overflow-hidden flex flex-col">
@@ -237,11 +297,13 @@ export default function Dashboard() {
                   <div className="space-y-0">
                     {scheduleTasks.map((task, index) => {
                       const isTaskLocked = task.status === 'completed' || task.status === 'in_progress';
-                      const isCurrentSlot = task.id === 's3'; 
-
+                      // Note: We use task.score for "Responsibility Score" in timeline (Integrity), 
+                      // not live progress. Live progress is usually just for the active view/orb.
+                      
                       return (
                         <div key={task.id} onClick={() => !isEditing && task.status !== 'completed' && handleToggleTask(task.id, false)}>
                           <TaskRow 
+                            // ... props ...
                             id={task.id}
                             title={task.title} 
                             timeRange={task.timeRange} 
@@ -252,7 +314,6 @@ export default function Dashboard() {
                             isLast={index === scheduleTasks.length - 1}
                             isEditing={isEditing}
                             isLocked={isTaskLocked}
-                            isCurrentTimeSlot={isCurrentSlot}
                             onDelete={() => handleDeleteTask(task.id)}
                             onInsert={() => handleInsertTask(index)}
                           />
@@ -309,26 +370,31 @@ export default function Dashboard() {
                 
                 {/* GRID LAYOUT (4 Columns) */}
                 <div className="grid grid-cols-4 gap-4">
-                  {hasSchedule && dailyActions.map((action, index) => (
-                    <TaskCircle 
-                      key={action.id}
-                      title={action.title} 
-                      duration={action.timeRange} 
-                      Icon={action.icon} 
-                      category={action.category} 
-                      // FIX: Use action.score if not active, so we see saved progress
-                      progress={action.score} 
-                      isActive={action.status === 'in_progress'}
-                      onClick={() => handleToggleTask(action.id, true)}
-                      
-                      // Edit Mode Props
-                      isEditing={isEditingActions}
-                      onDelete={() => handleDeleteDailyAction(action.id)}
-                      onDragStart={() => handleDragStart(index)}
-                      onDragOver={(e) => handleDragOver(e, index)}
-                      onDrop={handleDrop}
-                    />
-                  ))}
+                  {hasSchedule && dailyActions.map((action, index) => {
+                    const totalSecs = parseDurationToSeconds(action.timeRange);
+                    const progressPct = totalSecs > 0 ? (action.elapsedSeconds / totalSecs) * 100 : 0;
+
+                    return (
+                      <TaskCircle 
+                        key={action.id}
+                        title={action.title} 
+                        duration={action.timeRange} 
+                        Icon={action.icon} 
+                        category={action.category} 
+                        // PASS REAL PROGRESS
+                        progress={progressPct} 
+                        isActive={action.status === 'in_progress'}
+                        onClick={() => handleToggleTask(action.id, true)}
+                        
+                        // Edit Props
+                        isEditing={isEditingActions}
+                        onDelete={() => handleDeleteDailyAction(action.id)}
+                        onDragStart={() => handleDragStart(index)}
+                        onDragOver={(e) => handleDragOver(e, index)}
+                        onDrop={handleDrop}
+                      />
+                    );
+                  })}
                   
                   {/* Add New Button (Appends template to grid) */}
                   <div 
@@ -351,6 +417,7 @@ export default function Dashboard() {
         <div className="absolute bottom-0 w-full h-32 bg-gradient-to-t from-slate-50 via-slate-50/90 to-transparent pointer-events-none" />
         <div className="relative pb-[env(safe-area-inset-bottom)]">
           <nav className="mx-4 mb-4 bg-slate-900 text-slate-400 rounded-[2.5rem] px-6 py-3 flex justify-between items-center shadow-2xl shadow-slate-900/30 relative z-50">
+            {/* ... Buttons ... */}
             <div className="flex gap-5">
               <button className="flex flex-col items-center gap-1 text-indigo-400 transition-colors">
                 <Layout size={20} strokeWidth={2.5} />
@@ -372,7 +439,7 @@ export default function Dashboard() {
                 <span className="text-[9px] font-bold">Analytics</span>
               </button>
             </div>
-            {/* THE COMMAND ORB - UPDATED UI */}
+            {/* THE COMMAND ORB - LIVE DATA */}
             <div className="absolute left-1/2 -top-10 -translate-x-1/2 flex flex-col items-center z-50">
               <div className="relative w-20 h-20 rounded-full bg-slate-900 border-4 border-slate-50 shadow-xl shadow-indigo-900/20 flex items-center justify-center mb-3">
                 <div className="absolute inset-1 rounded-full border-4 border-slate-800" />
@@ -381,7 +448,8 @@ export default function Dashboard() {
                     <circle 
                       cx="40" cy="40" r="34" stroke="currentColor" strokeWidth="4" fill="none" 
                       strokeDasharray="213" 
-                      strokeDashoffset={activeTask ? "50" : "213"} 
+                      // LIVE PROGRESS
+                      strokeDashoffset={activeTask ? (213 - orbProgress) : 213} 
                       className={`${activeTask ? 'text-indigo-500' : 'text-slate-700'} transition-all duration-1000 ease-in-out`} 
                       strokeLinecap="round" 
                     />
@@ -395,15 +463,21 @@ export default function Dashboard() {
                     
                     {activeTask ? (
                       <div className="flex items-baseline gap-[1px]">
-                        {/* HOURS LOGIC */}
-                        {hours > 0 && (
+                        {/* LIVE HOURS & MINUTES */}
+                        {/* HOURS */}
+                        {orbHours > 0 && (
                           <>
-                            <span className="text-[10px] font-black tracking-tighter">{hours}</span>
+                            <span className="text-[10px] font-black tracking-tighter">{orbHours}</span>
                             <span className="text-[10px] font-bold text-indigo-300 mr-0.5">h</span>
                           </>
                         )}
-                        <span className="text-[10px] font-black tracking-tighter">{minutes}</span>
-                        <span className="text-[10px] font-bold text-indigo-300">m</span>
+                        {/* MINUTES */}
+                        <span className="text-[10px] font-black tracking-tighter">{orbMinutes}</span>
+                        <span className="text-[10px] font-bold text-indigo-300 mr-0.5">m</span>
+                        
+                        {/* SECONDS (NEW) */}
+                        <span className="text-[10px] font-black tracking-tighter">{orbSeconds}</span>
+                        <span className="text-[10px] font-bold text-indigo-300">s</span>
                       </div>
                     ) : (
                       <span className="text-[10px] font-bold text-slate-500">IDLE</span>
