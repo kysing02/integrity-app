@@ -1,5 +1,5 @@
 import React, { useRef } from 'react';
-import { LucideIcon, X, Check } from 'lucide-react'; // Added Check icon
+import { LucideIcon, X, Check } from 'lucide-react';
 
 interface TaskCircleProps {
   id?: string;
@@ -12,15 +12,13 @@ interface TaskCircleProps {
   
   category?: 'EFFICIENCY' | 'CONSISTENCY';
   progress?: number; 
-  isCompleted?: boolean; // NEW PROP: Visual state for completion
+  isCompleted?: boolean;
   
   isEditing?: boolean;
   onDelete?: () => void;
   onDragStart?: (e: React.DragEvent) => void;
   onDragOver?: (e: React.DragEvent) => void;
   onDrop?: (e: React.DragEvent) => void;
-  
-  // NEW: Long Press Handler
   onLongPress?: () => void;
 }
 
@@ -32,12 +30,11 @@ const TaskCircle = ({
   
   const timerRef = useRef<NodeJS.Timeout | null>(null);
 
-  // --- Long Press Logic ---
   const handlePointerDown = () => {
     if (isEditing) return;
     timerRef.current = setTimeout(() => {
       if (onLongPress) onLongPress();
-    }, 600); // 600ms threshold
+    }, 600);
   };
 
   const handlePointerUp = () => {
@@ -51,13 +48,17 @@ const TaskCircle = ({
     if (!isEditing && onClick) onClick();
   };
 
-  // Visual Overrides for Completed State
-  const finalProgress = isCompleted ? 100 : (category === 'EFFICIENCY' ? 100 : progress);
+  // --- PROGRESS VISUAL LOGIC ---
+  // EFFICIENCY: Always 100% (Binary: Do it or don't)
+  // CONSISTENCY: Use actual progress (Analog: How much did I do?)
+  const finalProgress = category === 'EFFICIENCY' ? 100 : progress;
+
+  // Colors
   const themeColor = category === 'EFFICIENCY' ? 'text-emerald-500' : 'text-indigo-500';
   const ringColor = isCompleted ? 'text-emerald-400' : (category === 'EFFICIENCY' ? 'text-emerald-400' : 'text-indigo-400');
   const bgClass = isCompleted ? 'bg-emerald-50' : (category === 'EFFICIENCY' ? 'bg-emerald-50' : 'bg-indigo-50');
 
-  // SVG Math (cx=30, cy=30, r=28)
+  // SVG Math
   const radius = 28; 
   const circumference = 2 * Math.PI * radius;
   const strokeDashoffset = circumference - (finalProgress / 100) * circumference;
@@ -72,9 +73,8 @@ const TaskCircle = ({
       onDragStart={onDragStart}
       onDragOver={onDragOver}
       onDrop={onDrop}
-      className={`relative flex flex-col items-center gap-3 group flex-shrink-0 snap-center transition-all duration-300 ${isEditing ? 'cursor-grab active:cursor-grabbing' : 'cursor-pointer'} ${isCompleted ? 'opacity-70 grayscale-[0.3]' : ''}`}
+      className={`relative flex flex-col items-center gap-3 group flex-shrink-0 snap-center transition-all duration-300 ${isEditing ? 'cursor-grab active:cursor-grabbing' : 'cursor-pointer'} ${isCompleted ? 'opacity-70 grayscale-[0.1]' : ''}`}
     >
-      {/* DELETE BUTTON */}
       {isEditing && (
         <button 
           onClick={(e) => { e.stopPropagation(); onDelete?.(); }}
@@ -84,7 +84,6 @@ const TaskCircle = ({
         </button>
       )}
 
-      {/* CIRCLE CONTAINER */}
       <div className={`relative w-16 h-16 rounded-full flex items-center justify-center transition-all duration-300 shadow-sm
         ${isActive 
           ? `scale-110 shadow-indigo-200 ${category === 'EFFICIENCY' ? 'bg-emerald-600' : 'bg-indigo-600'}`
@@ -92,13 +91,11 @@ const TaskCircle = ({
         }
       `}>
         
-        {/* PROGRESS RING */}
         <svg className="absolute inset-0 transform -rotate-90 w-full h-full p-0.5">
            <circle cx="30" cy="30" r={radius} stroke="currentColor" strokeWidth="3" fill="transparent" className={`${isActive ? 'text-white/20' : 'text-slate-200'}`} />
            <circle cx="30" cy="30" r={radius} stroke="currentColor" strokeWidth="3" fill="transparent" strokeDasharray={circumference} strokeDashoffset={strokeDashoffset} strokeLinecap="round" className={`transition-all duration-1000 ease-in-out ${isActive ? 'text-white' : ringColor}`} />
         </svg>
 
-        {/* ICON or CHECK */}
         {isCompleted ? (
            <Check size={24} className={isActive ? 'text-white' : 'text-emerald-600'} strokeWidth={3} />
         ) : (
@@ -106,7 +103,6 @@ const TaskCircle = ({
         )}
       </div>
       
-      {/* TEXT */}
       <div className="text-center">
         <p className={`text-xs font-bold ${isActive ? themeColor : 'text-slate-800'} ${isCompleted ? 'line-through text-slate-400' : ''}`}>{title}</p>
         <p className="text-[10px] font-medium text-slate-400">{duration}</p>

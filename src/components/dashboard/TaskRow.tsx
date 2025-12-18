@@ -10,8 +10,6 @@ interface TaskRowProps {
   category?: 'EFFICIENCY' | 'CONSISTENCY';
   isLast?: boolean;
   icon: LucideIcon;
-  
-  // NEW: Variant 'marker' is for the static "Checked-in" entry
   variant?: 'task' | 'marker'; 
 
   // Edit Props
@@ -27,12 +25,11 @@ interface TaskRowProps {
 
 const TaskRow = ({ 
   title, timeRange, progress, status, category = 'CONSISTENCY', isLast, icon: Icon,
-  variant = 'task', // Default to normal task
+  variant = 'task',
   isEditing, isLocked, isCurrentTimeSlot, onDelete, onInsert, onEditClick, onToggleComplete
 }: TaskRowProps) => {
   
   const isMarker = variant === 'marker';
-  // Marker is never editable
   const isEditable = isEditing && !isLocked && !isMarker;
   const isCompleted = status === 'completed';
 
@@ -43,47 +40,52 @@ const TaskRow = ({
 
   if (!isMarker) {
     if (status === 'pending') {
+       // Pending Efficiency = Grey Full Ring
+       // Pending Consistency = Grey Empty Ring
        ringColor = isCurrentTimeSlot ? 'text-emerald-500' : 'text-slate-200';
        iconColor = isCurrentTimeSlot ? 'text-emerald-600' : 'text-slate-300';
     } else {
-       // Efficiency = Green, Consistency = Purple
+       // Active or Completed
        const isEfficiency = category === 'EFFICIENCY';
        ringColor = isEfficiency ? 'text-emerald-500' : 'text-indigo-500';
        iconColor = isEfficiency ? 'text-emerald-600' : 'text-indigo-600';
     }
     dotColor = category === 'CONSISTENCY' ? 'bg-indigo-400' : 'bg-emerald-400';
   } else {
-    // MARKER COLORS (Greyed out)
+    // MARKER COLORS
     ringColor = 'text-slate-200'; 
     iconColor = 'text-slate-300';
     dotColor = 'bg-slate-200';
   }
 
-  // Edit Mode Override
   if (isEditable) {
     ringColor = 'text-indigo-400';
     iconColor = 'text-indigo-500';
   }
 
-  // --- 2. PROGRESS LOGIC ---
+  // --- 2. PROGRESS LOGIC (CRITICAL CHANGE) ---
   let finalProgress = progress;
-  // If Efficiency Task is Complete -> Force 100%
-  if (category === 'EFFICIENCY' && isCompleted) {
+
+  if (category === 'EFFICIENCY') {
+    // BINARY: Efficiency tasks always show 100% ring (representing the "Whole Unit")
+    // The state (Pending/Done) is shown via Color, not Ring Length.
     finalProgress = 100;
+  } else {
+    // ANALOG: Consistency tasks show actual recorded progress.
+    // We DO NOT force 100% on completion. We show what was recorded.
+    finalProgress = progress;
   }
-  // If Consistency Task is Complete -> Keep actual progress (e.g. 50%)
-  
-  // Marker always shows 100% (Full grey circle)
+
+  // Visual Overrides
   if (isMarker) finalProgress = 100; 
   if (isEditable) finalProgress = 100;
 
   // --- 3. CONTAINER STYLES ---
-  // Marker gets 'ghost' opacity. Completed gets grayscale.
+  // Adjusted grayscale to be lighter so we can see the Green/Purple on completed items
   const containerClass = isMarker 
     ? 'opacity-60' 
-    : (isCompleted || (isEditing && isLocked) ? 'opacity-60 grayscale-[0.3]' : 'opacity-100');
+    : (isCompleted || (isEditing && isLocked) ? 'opacity-70 grayscale-[0.1]' : 'opacity-100');
 
-  // Marker has NO border/shadow/bg
   const cardClass = isMarker
     ? 'bg-transparent border-transparent pl-0' 
     : `p-4 rounded-2xl border transition-all duration-300 ${
@@ -127,7 +129,6 @@ const TaskRow = ({
               )}
            </ProgressCircle>
            
-           {/* Check Overlay on Hover (Only for real tasks) */}
            {!isCompleted && !isEditing && !isMarker && (
              <div className="absolute inset-0 flex items-center justify-center opacity-0 group-hover/circle:opacity-100 transition-opacity">
                 <Check size={20} className="text-emerald-400" />
@@ -156,7 +157,7 @@ const TaskRow = ({
               </p>
             </div>
             
-            {/* Action Buttons (Hidden for Marker) */}
+            {/* Action Buttons */}
             {!isMarker && (
               <div className="flex gap-3 items-center">
                 {isEditing ? (
