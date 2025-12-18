@@ -1,16 +1,20 @@
 import React from 'react';
 
 interface FlexBucketProps {
-  totalVolumeSeconds: number;  // "Diligence" (Fills the bar)
-  flexCapacitySeconds: number; // "Availability" (Text info)
+  totalVolumeSeconds: number;  // "Diligence"
+  flexCapacitySeconds: number; // "Availability"
 }
 
 const FlexBucket = ({ totalVolumeSeconds, flexCapacitySeconds }: FlexBucketProps) => {
-  // CONFIG: Daily Target for the visual bar (e.g., 12 hours = 100% full)
-  const VISUAL_TARGET_SECONDS = 12 * 60 * 60; 
   
-  // Bar Percentage (Capped at 100%)
-  const percentage = Math.min(100, (totalVolumeSeconds / VISUAL_TARGET_SECONDS) * 100);
+  // LOGIC: The "Whole Pie" is the sum of what you've booked + what's left.
+  // As you book more, Flex shrinks, Volume grows, but the Total stays roughly constant 
+  // (until time passes, then the Total shrinks, making the bar fill up faster!)
+  const totalBudget = totalVolumeSeconds + flexCapacitySeconds;
+  const safeTotal = totalBudget > 0 ? totalBudget : 1;
+  
+  // Percentage of your available time that is currently booked
+  const percentage = Math.min(100, (totalVolumeSeconds / safeTotal) * 100);
   
   // Format helpers
   const formatTime = (totalSeconds: number) => {
@@ -25,7 +29,7 @@ const FlexBucket = ({ totalVolumeSeconds, flexCapacitySeconds }: FlexBucketProps
       <div className="flex justify-between items-end">
         <div className="flex flex-col">
            <h3 className="font-bold text-sm text-slate-800 uppercase tracking-widest">Daily Volume</h3>
-           <span className="text-[10px] text-slate-400 font-bold">Target: 12h</span>
+           {/* Target text removed */}
         </div>
         
         <div className="text-right">
@@ -36,7 +40,7 @@ const FlexBucket = ({ totalVolumeSeconds, flexCapacitySeconds }: FlexBucketProps
         </div>
       </div>
 
-      {/* The Bar (Visualizes Volume) */}
+      {/* The Bar */}
       <div className="relative h-3 w-full bg-slate-100 rounded-full overflow-hidden border border-slate-200">
         <div className="absolute inset-0 opacity-30" 
              style={{ backgroundImage: 'linear-gradient(45deg, #cbd5e1 25%, transparent 25%, transparent 50%, #cbd5e1 50%, #cbd5e1 75%, transparent 75%, transparent)', backgroundSize: '8px 8px' }} 
@@ -49,7 +53,7 @@ const FlexBucket = ({ totalVolumeSeconds, flexCapacitySeconds }: FlexBucketProps
         </div>
       </div>
       
-      {/* Footer: Flex Capacity (The "Scarcity" Logic) */}
+      {/* Footer: Flex Capacity */}
       <div className="flex justify-between items-center text-[10px] font-bold bg-slate-50 px-3 py-1.5 rounded-lg border border-slate-100 mt-1">
         <span className="text-slate-400 uppercase tracking-wider">Remaining Capacity</span>
         <span className={`${flexCapacitySeconds < 3600 ? 'text-rose-500' : 'text-emerald-600'}`}>

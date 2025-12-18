@@ -62,11 +62,10 @@ export default function Dashboard() {
   useEffect(() => {
     let interval: NodeJS.Timeout;
 
-    // Run this loop even if no task is active to update "Time Left in Day"
     interval = setInterval(() => {
       const now = new Date();
       
-      // 1. Update Active Task Elapsed Time (Existing Logic)
+      // 1. Update Active Task Elapsed Time (Your existing logic)
       if (activeTask) {
          const updateList = (list: TaskItem[]) => list.map(t => {
             if (t.id === activeTask.id) return { ...t, elapsedSeconds: t.elapsedSeconds + 1 };
@@ -76,17 +75,34 @@ export default function Dashboard() {
          else setScheduleTasks(prev => updateList(prev));
       }
 
-      // 2. CALCULATE FLEX CAPACITY (The "Space Remaining" Formula)
-      const midnight = new Date();
-      midnight.setHours(24, 0, 0, 0);
-      const secondsLeftInDay = (midnight.getTime() - now.getTime()) / 1000;
+      // 2. CALCULATE HORIZON (Midnight OR Sleep Time)
+      let horizon = new Date();
+      horizon.setHours(24, 0, 0, 0); // Default: Midnight
 
-      // Sum of FUTURE obligations only
-      const remainingScheduleLoad = scheduleTasks.reduce((acc, t) => acc + getTaskRemainingSeconds(t, now), 0);
+      const sleepTask = scheduleTasks.find(t => t.icon === Moon || t.title === "Sleep");
+      if (sleepTask && !sleepTask.timeRange.includes('-')) {
+         // Assuming Sleep is a single point like "23:00"
+         const sleepDate = getTodayDateAtTime(sleepTask.timeRange);
+         // Only use Sleep as horizon if it's later today (before midnight)
+         // If sleep is 00:30, it's > now but < midnight? No, it's next day.
+         // Simple check: If SleepDate is > Now and < Midnight, use it.
+         if (sleepDate > now && sleepDate < horizon) {
+            horizon = sleepDate;
+         }
+      }
+
+      // 3. CALCULATE REMAINING TIME BUDGET
+      const secondsUntilHorizon = Math.max(0, (horizon.getTime() - now.getTime()) / 1000);
+
+      // 4. SUM OF FUTURE OBLIGATIONS (Excluding Sleep itself)
+      const remainingScheduleLoad = scheduleTasks
+        .filter(t => t.id !== sleepTask?.id) // Don't double count sleep time
+        .reduce((acc, t) => acc + getTaskRemainingSeconds(t, now), 0);
+        
       const remainingDailyLoad = dailyActions.reduce((acc, t) => acc + getTaskRemainingSeconds(t, now), 0);
 
-      // Flex = Time Left - Work Left
-      const currentFlex = Math.max(0, secondsLeftInDay - remainingScheduleLoad - remainingDailyLoad);
+      // 5. FINAL CALCULATION
+      const currentFlex = Math.max(0, secondsUntilHorizon - remainingScheduleLoad - remainingDailyLoad);
       setFlexCapacitySeconds(currentFlex);
 
     }, 1000);
@@ -94,7 +110,7 @@ export default function Dashboard() {
     return () => clearInterval(interval);
   }, [activeTask, scheduleTasks, dailyActions]);
 
-  // --- CALCULATE TOTAL VOLUME (For the "Bar Fill" - Diligence) ---
+  // --- CALCULATE TOTAL VOLUME (For the Bar Fill) ---
   const scheduleLoad = scheduleTasks.reduce((acc, t) => acc + parseDurationToSeconds(t.timeRange), 0);
   const dailyLoad = dailyActions.reduce((acc, t) => acc + parseDurationToSeconds(t.timeRange), 0);
   const totalVolumeSeconds = scheduleLoad + dailyLoad;
@@ -245,7 +261,7 @@ export default function Dashboard() {
                 </div>
 
                 <div className="-mx-6 mb-4"> 
-                  {/* Pass BOTH metrics: Volume (Past+Future Plan) and Capacity (Future Space) */}
+                  {/* PASS BOTH VALUES TO FLEXBUCKET */}
                   <FlexBucket 
                     totalVolumeSeconds={totalVolumeSeconds} 
                     flexCapacitySeconds={flexCapacitySeconds} 
@@ -257,17 +273,35 @@ export default function Dashboard() {
                     const rawProgress = totalSecs > 0 ? (action.elapsedSeconds / totalSecs) * 100 : 0;
                     return (
                       <TaskCircle 
-                        key={action.id} title={action.title} duration={action.timeRange} Icon={action.icon} category={action.category} 
-                        progress={Math.min(rawProgress, 100)} isActive={action.status === 'in_progress'} onClick={() => handleToggleTask(action.id, true)}
-                        isEditing={isEditingActions} onDelete={() => handleDeleteDailyAction(action.id)}
-                        onDragStart={() => handleDragStart(index)} onDragOver={(e) => handleDragOver(e, index)} onDrop={handleDrop}
+                        key={action.id} 
+                        title={action.title} 
+                        duration={action.timeRange} 
+                        Icon={action.icon} 
+                        category={action.category} 
+                        progress={Math.min(rawProgress, 100)} 
+                        isActive={action.status === 'in_progress'} 
+                        onClick={() => handleToggleTask(action.id, true)}
+                        isEditing={isEditingActions} 
+                        onDelete={() => handleDeleteDailyAction(action.id)}
+                        onDragStart={() => handleDragStart(index)} 
+                        onDragOver={(e) => handleDragOver(e, index)} 
+                        onDrop={handleDrop}
                       />
                     );
                   })}
-                  <div onClick={handleAddDailyAction} className="flex flex-col items-center gap-3 cursor-pointer active:scale-95 transition-transform">
-                    <div className="w-16 h-16 rounded-3xl bg-white border-2 border-dashed border-slate-300 flex items-center justify-center text-slate-300 hover:text-indigo-500 hover:border-indigo-200 transition-all shadow-sm"><Plus size={24} /></div>
-                    <p className="text-xs font-bold text-slate-300">Add New</p>
-                  </div>
+                  
+                  {/* Add New Button - ONLY VISIBLE WHEN EDITING */}
+                  {isEditingActions && (
+                    <div 
+                      onClick={handleAddDailyAction} 
+                      className="flex flex-col items-center gap-3 cursor-pointer active:scale-95 transition-transform"
+                    >
+                      <div className="w-16 h-16 rounded-3xl bg-white border-2 border-dashed border-slate-300 flex items-center justify-center text-slate-300 hover:text-indigo-500 hover:border-indigo-200 transition-all shadow-sm">
+                        <Plus size={24} />
+                      </div>
+                      <p className="text-xs font-bold text-slate-300">Add New</p>
+                    </div>
+                  )}
                 </div>
               </section>
             </div>
