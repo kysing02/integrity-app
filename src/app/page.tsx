@@ -2,10 +2,9 @@
 
 import { useState, useEffect } from 'react';
 import { 
-  Pencil, BookOpen, Brush, Plus, Clock, Brain, Users, Dumbbell, Sun, Moon, Edit3, Lock, AlertCircle, Check, Sparkles, Coffee, LogOut
+  Pencil, BookOpen, Brush, Plus, Clock, Brain, Users, Dumbbell, Sun, Edit3, Lock, Check, Sparkles, LogOut, Coffee
 } from 'lucide-react';
 
-// Components
 import TimelineRibbon from '@/components/dashboard/TimelineRibbon';
 import TaskRow from '@/components/dashboard/TaskRow';
 import FlexBucket from '@/components/dashboard/FlexBucket';
@@ -13,13 +12,16 @@ import TaskCircle from '@/components/dashboard/TaskCircle';
 import DashboardNavbar from '@/components/dashboard/DashboardNavbar';
 import DashboardHeader from '@/components/dashboard/DashboardHeader';
 
-// Utils & Types
 import { TaskItem } from '@/types/dashboard';
-import { parseDurationToSeconds, getTodayDateAtTime, getTaskRemainingSeconds } from '@/lib/timeUtils';
+import { parseDurationToSeconds, getTaskRemainingSeconds } from '@/lib/timeUtils';
 
-// --- INITIAL DATA (No Wake Up / Sleep tasks anymore) ---
+// --- DEBUG CONFIG ---
+const DEBUG_TIME = "08:00"; 
+
+// --- INITIAL DATA ---
 const INITIAL_SCHEDULE: TaskItem[] = [
-  { id: 's2', title: "Deep Work", timeRange: "09:00 - 11:30", score: 0, status: "pending", category: "CONSISTENCY", icon: Brain, elapsedSeconds: 0 },
+  // UPDATED: Shortened for debug
+  { id: 's2', title: "Deep Work", timeRange: "09:00 - 09:01", score: 0, status: "pending", category: "CONSISTENCY", icon: Brain, elapsedSeconds: 0 },
   { id: 's3', title: "Strategy Meeting", timeRange: "13:00 - 14:00", score: 0, status: "pending", category: "EFFICIENCY", icon: Users, elapsedSeconds: 0 },
   { id: 's4', title: "Fitness", timeRange: "17:30 - 18:00", score: 0, status: "pending", category: "CONSISTENCY", icon: Dumbbell, elapsedSeconds: 0 },
 ];
@@ -31,11 +33,9 @@ const INITIAL_DAILY: TaskItem[] = [
 ];
 
 export default function Dashboard() {
-  // --- LIFECYCLE STATE ---
   const [dayStatus, setDayStatus] = useState<'sleeping' | 'active' | 'completed'>('sleeping');
   const [checkInTime, setCheckInTime] = useState<Date | null>(null);
 
-  // --- DASHBOARD STATE ---
   const [hasSchedule, setHasSchedule] = useState(true); 
   const [isEditing, setIsEditing] = useState(false);
   const [isEditingActions, setIsEditingActions] = useState(false);
@@ -49,16 +49,25 @@ export default function Dashboard() {
 
   const activeTask = [...scheduleTasks, ...dailyActions].find(t => t.status === 'in_progress');
   
-  // Total Volume (Always calculated from planned tasks)
   const totalVolumeSeconds = 
     scheduleTasks.reduce((acc, t) => acc + parseDurationToSeconds(t.timeRange), 0) +
     dailyActions.reduce((acc, t) => acc + parseDurationToSeconds(t.timeRange), 0);
+
+  // --- HELPER: Get "Current" Time (Debug-aware) ---
+  const getNow = () => {
+    const now = new Date();
+    if (DEBUG_TIME) {
+      const [h, m] = DEBUG_TIME.split(':').map(Number);
+      now.setHours(h, m, 0, 0);
+    }
+    return now;
+  };
 
   // --- TIMER ENGINE ---
   useEffect(() => {
     let interval: NodeJS.Timeout;
     interval = setInterval(() => {
-      const now = new Date();
+      const now = getNow(); // Use debug time
       
       // 1. Update Active Timer
       if (activeTask) {
@@ -70,16 +79,26 @@ export default function Dashboard() {
          else setScheduleTasks(prev => updateList(prev));
       }
 
-      // 2. Calculate Flex Capacity (Only if day is active)
+      // 2. Calculate Flex Capacity
       if (dayStatus === 'active') {
         const midnight = new Date();
-        midnight.setHours(24, 0, 0, 0);
-        const secondsLeftInDay = (midnight.getTime() - now.getTime()) / 1000;
+        midnight.setHours(24, 0, 0, 0); // Logic assumes today
         
+        // If debug time is set, ensure 'midnight' is relative to that mock day
+        if (DEBUG_TIME) {
+            const [h, m] = DEBUG_TIME.split(':').map(Number);
+            // If now is 08:00, midnight is 16 hours away
+        }
+
+        const secondsLeftInDay = (midnight.getTime() - new Date().setHours(24,0,0,0) + (24*3600*1000 - (now.getHours()*3600+now.getMinutes()*60)*1000)) / 1000;
+        // Simplified: (Seconds in Day) - (Seconds passed since midnight)
+        const secondsSinceMidnight = now.getHours() * 3600 + now.getMinutes() * 60 + now.getSeconds();
+        const timeLeft = (24 * 3600) - secondsSinceMidnight;
+
         const remainingScheduleLoad = scheduleTasks.reduce((acc, t) => acc + getTaskRemainingSeconds(t, now), 0);
         const remainingDailyLoad = dailyActions.reduce((acc, t) => acc + getTaskRemainingSeconds(t, now), 0);
 
-        setFlexCapacitySeconds(Math.max(0, secondsLeftInDay - remainingScheduleLoad - remainingDailyLoad));
+        setFlexCapacitySeconds(Math.max(0, timeLeft - remainingScheduleLoad - remainingDailyLoad));
       }
     }, 1000);
     return () => clearInterval(interval);
@@ -88,13 +107,12 @@ export default function Dashboard() {
   // --- HANDLERS ---
   const handleStartDay = () => {
     setDayStatus('active');
-    setCheckInTime(new Date());
+    setCheckInTime(getNow()); // Record the "Debug" time as start time
   };
 
   const handleEndDay = () => {
     if (confirm("End your day? This will lock your timeline.")) {
       setDayStatus('completed');
-      // In a real app, you would save the 'completed' state to DB here
     }
   };
 
@@ -124,7 +142,7 @@ export default function Dashboard() {
     else setScheduleTasks(prev => toggleList(prev));
   };
 
-  // ... (Keep existing CRUD handlers: delete, insert, drag/drop) ...
+  // ... (Other CRUD handlers same as before)
   const handleDeleteTask = (id: string) => setScheduleTasks(prev => prev.filter(t => t.id !== id));
   const handleInsertTask = (index: number) => {
     const newTask: TaskItem = { id: Math.random().toString(), title: "New Task", timeRange: "--:--", score: 0, status: 'pending', category: 'CONSISTENCY', icon: Brain, elapsedSeconds: 0 };
@@ -144,7 +162,7 @@ export default function Dashboard() {
   };
   const handleDrop = () => setDraggedItemIndex(null);
 
-  // --- DYNAMIC UI VALUES ---
+  // --- UI VALUES ---
   const pillState = (() => {
     if (dayStatus === 'sleeping') return { text: "Ready for your day?", color: "text-slate-500 border-slate-200 bg-white" };
     if (dayStatus === 'completed') return { text: "Day Completed", color: "text-emerald-600 border-emerald-200 bg-emerald-50" };
@@ -167,14 +185,19 @@ export default function Dashboard() {
       <div className="scroller flex-1 overflow-y-auto overflow-x-hidden no-scrollbar">
         <div className="min-h-[101%] pb-48"> 
             
-            {/* 1. Status Pill */}
             <div className={`mt-6 mb-2 flex items-center justify-center gap-2 text-xs font-semibold py-2 rounded-full px-4 w-fit mx-auto border shadow-sm ${pillState.color}`}>
               <Clock size={12} />
               <span>{pillState.text}</span>
             </div>
 
-            {/* 2. Timeline Ribbon (Always visible) */}
-            <TimelineRibbon showCurrentTime={dayStatus === 'active'} tasks={scheduleTasks} />
+            {/* TIMELINE RIBBON */}
+            <TimelineRibbon 
+              showCurrentTime={dayStatus === 'active'} 
+              tasks={scheduleTasks} 
+              plannedCheckIn="07:00"
+              plannedSleep="23:00"
+              debugTime={DEBUG_TIME} // Pass debug time
+            />
 
             <div className="px-6 mt-4">
               
@@ -200,8 +223,7 @@ export default function Dashboard() {
                   <section className="mb-10 animate-in fade-in duration-500">
                     <div className="flex justify-between items-end mb-6 border-b border-slate-100 pb-2">
                       <h2 className="text-xs font-bold text-slate-400 uppercase tracking-widest">Today's Timeline</h2>
-                      {/* Edit Buttons ... */}
-                      {hasSchedule && !isEditing && !isPast && (
+                      {hasSchedule && !isEditing && (
                         <button onClick={() => setIsEditing(true)} disabled={isEditingActions} className={`flex items-center gap-1.5 text-[10px] font-bold px-3 py-1.5 rounded-full transition-colors ${isEditingActions ? 'text-slate-300' : 'text-indigo-600 bg-indigo-50 hover:bg-indigo-100'}`}>
                           <Edit3 size={12} /><span>Edit Schedule</span>
                         </button>
@@ -211,24 +233,18 @@ export default function Dashboard() {
 
                     {hasSchedule ? (
                       <div className="space-y-0">
-                        {/* 1. CHECK-IN MARKER (Replaces Wake Up) */}
+                        {/* 1. CHECK-IN MARKER */}
                         <TaskRow 
                           id="check-in" 
                           title={`Checked-in at ${formatCheckInTime(checkInTime)}`} 
                           timeRange="07:00" 
-                          progress={100} 
-                          score={0}
-                          status="completed" 
-                          category="CONSISTENCY" 
-                          icon={Sun} 
-                          variant="marker" // Uses the new style
+                          progress={100} score={0} status="completed" category="CONSISTENCY" icon={Sun} variant="marker"
                           isLast={false}
                         />
 
                         {/* 2. SCHEDULED TASKS */}
                         {scheduleTasks.map((task, index) => {
                           const isTaskLocked = task.status === 'completed' || task.status === 'in_progress';
-                          // Calculate real progress
                           const totalSecs = parseDurationToSeconds(task.timeRange);
                           const progressPct = totalSecs > 0 ? (task.elapsedSeconds / totalSecs) * 100 : 0;
 
@@ -236,8 +252,7 @@ export default function Dashboard() {
                             <div key={task.id} onClick={() => !isEditing && task.status !== 'completed' && handleToggleTask(task.id, false)}>
                               <TaskRow 
                                 id={task.id} title={task.title} timeRange={task.timeRange} status={task.status} category={task.category} icon={task.icon} 
-                                score={0} // Not used anymore
-                                progress={Math.min(progressPct, 100)} 
+                                score={0} progress={Math.min(progressPct, 100)} 
                                 isLast={false} 
                                 isEditing={isEditing} isLocked={isTaskLocked}
                                 onDelete={() => handleDeleteTask(task.id)} onInsert={() => handleInsertTask(index)}
@@ -248,27 +263,26 @@ export default function Dashboard() {
                         })}
 
                         {/* 3. END DAY BUTTON */}
-                        <div className="pt-4 flex justify-center">
-                          <button 
-                            onClick={handleEndDay}
-                            className="flex items-center gap-2 text-xs font-bold text-slate-400 bg-slate-100 px-6 py-3 rounded-2xl hover:bg-slate-200 hover:text-slate-600 transition-all active:scale-95"
-                          >
-                            <LogOut size={16} />
-                            <span>Call it a day</span>
-                          </button>
+                        <div className="pt-4 flex flex-col items-center gap-2">
+                           <span className="text-[10px] font-bold text-slate-300">23:00</span>
+                           <button 
+                             onClick={handleEndDay}
+                             className="flex items-center gap-2 text-xs font-bold text-slate-400 bg-slate-100 px-6 py-3 rounded-2xl hover:bg-slate-200 hover:text-slate-600 transition-all active:scale-95"
+                           >
+                             <LogOut size={16} />
+                             <span>Call it a day</span>
+                           </button>
                         </div>
                       </div>
                     ) : (
-                      // Empty State ...
                       <div className="flex flex-col items-center justify-center py-12 border-2 border-dashed border-slate-200 rounded-3xl bg-slate-50/50">
-                         {/* ... */}
+                         {/* Empty State */}
                       </div>
                     )}
                   </section>
 
                   {/* DAILY ACTIONS */}
                   <section className="mb-10 pt-6 border-t border-slate-200 animate-in fade-in slide-in-from-bottom-8 duration-700 delay-100">
-                    {/* ... Header ... */}
                     <div className="flex justify-between items-center mb-6">
                       <h2 className="text-xs font-bold text-slate-400 uppercase tracking-widest">Daily Actions</h2>
                       {!isEditingActions ? (
