@@ -15,7 +15,7 @@ import DashboardHeader from '@/components/dashboard/DashboardHeader';
 
 // Utils & Types
 import { TaskItem } from '@/types/dashboard';
-import { parseDurationToSeconds } from '@/lib/timeUtils';
+import { parseDurationToSeconds, getTodayDateAtTime, getTaskRemainingSeconds } from '@/lib/timeUtils';
 
 // --- Initial Data ---
 const INITIAL_SCHEDULE: TaskItem[] = [
@@ -44,21 +44,60 @@ export default function Dashboard() {
 
   const activeTask = [...scheduleTasks, ...dailyActions].find(t => t.status === 'in_progress');
 
-  // --- TIMER ENGINE ---
+  const [flexCapacitySeconds, setFlexCapacitySeconds] = useState(0);
+  const [totalFlexSeconds, setTotalFlexSeconds] = useState(0); // The "Budget" for the day
+
+  // --- 1. INITIALIZE FLEX BUDGET (Run once or when schedule changes) ---
+  useEffect(() => {
+    // Calculate total time assigned to tasks (Static)
+    const scheduleLoad = scheduleTasks.reduce((acc, t) => acc + parseDurationToSeconds(t.timeRange), 0);
+    const dailyLoad = dailyActions.reduce((acc, t) => acc + parseDurationToSeconds(t.timeRange), 0);
+    
+    // Total Flex = 24h - Commitments
+    const daySeconds = 24 * 60 * 60;
+    setTotalFlexSeconds(Math.max(0, daySeconds - scheduleLoad - dailyLoad));
+  }, [scheduleTasks, dailyActions]);
+
+  // --- TIMER ENGINE & FLEX CALCULATION ---
   useEffect(() => {
     let interval: NodeJS.Timeout;
-    if (activeTask) {
-      interval = setInterval(() => {
-        const updateList = (list: TaskItem[]) => list.map(t => {
-          if (t.id === activeTask.id) return { ...t, elapsedSeconds: t.elapsedSeconds + 1 };
-          return t;
-        });
-        if (activeTask.isDaily) setDailyActions(prev => updateList(prev));
-        else setScheduleTasks(prev => updateList(prev));
-      }, 1000);
-    }
+
+    // Run this loop even if no task is active to update "Time Left in Day"
+    interval = setInterval(() => {
+      const now = new Date();
+      
+      // 1. Update Active Task Elapsed Time (Existing Logic)
+      if (activeTask) {
+         const updateList = (list: TaskItem[]) => list.map(t => {
+            if (t.id === activeTask.id) return { ...t, elapsedSeconds: t.elapsedSeconds + 1 };
+            return t;
+         });
+         if (activeTask.isDaily) setDailyActions(prev => updateList(prev));
+         else setScheduleTasks(prev => updateList(prev));
+      }
+
+      // 2. CALCULATE FLEX CAPACITY (The "Space Remaining" Formula)
+      const midnight = new Date();
+      midnight.setHours(24, 0, 0, 0);
+      const secondsLeftInDay = (midnight.getTime() - now.getTime()) / 1000;
+
+      // Sum of FUTURE obligations only
+      const remainingScheduleLoad = scheduleTasks.reduce((acc, t) => acc + getTaskRemainingSeconds(t, now), 0);
+      const remainingDailyLoad = dailyActions.reduce((acc, t) => acc + getTaskRemainingSeconds(t, now), 0);
+
+      // Flex = Time Left - Work Left
+      const currentFlex = Math.max(0, secondsLeftInDay - remainingScheduleLoad - remainingDailyLoad);
+      setFlexCapacitySeconds(currentFlex);
+
+    }, 1000);
+
     return () => clearInterval(interval);
-  }, [activeTask]);
+  }, [activeTask, scheduleTasks, dailyActions]);
+
+  // --- CALCULATE TOTAL VOLUME (For the "Bar Fill" - Diligence) ---
+  const scheduleLoad = scheduleTasks.reduce((acc, t) => acc + parseDurationToSeconds(t.timeRange), 0);
+  const dailyLoad = dailyActions.reduce((acc, t) => acc + parseDurationToSeconds(t.timeRange), 0);
+  const totalVolumeSeconds = scheduleLoad + dailyLoad;
 
   // --- HANDLERS ---
   const handleToggleTask = (id: string, isDailyAction: boolean) => {
@@ -188,8 +227,10 @@ export default function Dashboard() {
                   </div>
                 )}
               </section>
-
+              
+              {/* DAILY ACTIONS */}
               <section className="mb-10 pt-6 border-t border-slate-200">
+                {/* ... Header ... */}
                 <div className="flex justify-between items-center mb-6">
                   <h2 className="text-xs font-bold text-slate-400 uppercase tracking-widest">Daily Actions</h2>
                   {!isEditingActions ? (
@@ -203,7 +244,13 @@ export default function Dashboard() {
                   )}
                 </div>
 
-                <div className="-mx-6 mb-4"><FlexBucket totalFlexMinutes={600} usedMinutes={120} /></div>
+                <div className="-mx-6 mb-4"> 
+                  {/* Pass BOTH metrics: Volume (Past+Future Plan) and Capacity (Future Space) */}
+                  <FlexBucket 
+                    totalVolumeSeconds={totalVolumeSeconds} 
+                    flexCapacitySeconds={flexCapacitySeconds} 
+                  />
+                </div>
                 <div className="grid grid-cols-4 gap-4">
                   {hasSchedule && dailyActions.map((action, index) => {
                     const totalSecs = parseDurationToSeconds(action.timeRange);
