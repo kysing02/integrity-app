@@ -14,6 +14,9 @@ interface TaskRowProps {
   // Edit Props
   isEditing?: boolean;
   isLocked?: boolean; 
+  // NEW PROP
+  isCurrentTimeSlot?: boolean; // Controls the "Current Schedule" highlight
+  
   onDelete?: () => void;
   onInsert?: () => void;
   onEditClick?: () => void;
@@ -21,14 +24,17 @@ interface TaskRowProps {
 
 const TaskRow = ({ 
   title, timeRange, score, status, category = 'CONSISTENCY', isLast, icon: Icon,
-  isEditing, isLocked, onDelete, onInsert, onEditClick
+  isEditing, isLocked, isCurrentTimeSlot, onDelete, onInsert, onEditClick
 }: TaskRowProps) => {
   
   const isEditable = isEditing && !isLocked;
 
   // Determine Colors
-  const ringColor = status === 'pending' ? 'text-slate-200' : (score < 90 ? 'text-amber-500' : 'text-emerald-500');
-  const iconColor = status === 'pending' ? 'text-slate-300' : (score < 90 ? 'text-amber-600' : 'text-emerald-600');
+  // LOGIC CHANGE: If it's the current time slot, force Green Ring (Emerald), otherwise follow status
+  let ringColor = status === 'pending' ? 'text-slate-200' : (score < 90 ? 'text-amber-500' : 'text-emerald-500');
+  if (isCurrentTimeSlot) ringColor = 'text-emerald-500';
+
+  const iconColor = status === 'pending' && !isCurrentTimeSlot ? 'text-slate-300' : (score < 90 ? 'text-amber-600' : 'text-emerald-600');
   const dotColor = category === 'CONSISTENCY' ? 'bg-indigo-400' : 'bg-emerald-400';
   const isCompleted = status === 'completed';
 
@@ -39,9 +45,8 @@ const TaskRow = ({
   // Final Visuals
   const finalRingColor = isEditable ? editRingColor : ringColor;
   const finalIconColor = isEditable ? editIconColor : iconColor;
-  const finalProgress = isEditable ? 100 : (status === 'pending' ? 0 : score);
+  const finalProgress = isEditable ? 100 : (status === 'pending' && !isCurrentTimeSlot ? 0 : (isCurrentTimeSlot ? 0 : score)); // Keep 0% if current but not started, or change logic if you want 100%
 
-  // FADE LOGIC: Fade if completed (always) OR if we are editing and the task is locked (current/past)
   const shouldFade = isCompleted || (isEditing && isLocked);
 
   return (
@@ -50,7 +55,6 @@ const TaskRow = ({
       {/* Connection Line */}
       {!isLast && (
         <div className="absolute left-[23px] top-[50px] bottom-0 w-0.5 bg-slate-100 flex flex-col items-center justify-center">
-           {/* INSERT BUTTON (+) - Only show if Editing AND the current task is NOT locked */}
            {isEditing && !isLocked && (
              <button 
                 onClick={onInsert}
@@ -67,15 +71,13 @@ const TaskRow = ({
          <ProgressCircle size={48} progress={finalProgress} color={finalRingColor}>
             <Icon size={20} className={finalIconColor} />
          </ProgressCircle>
-         
-         {/* SCORE TEXT REMOVED COMPLETELY */}
       </div>
 
       {/* Right Column: Card */}
       <div className="flex-grow mb-6 group cursor-pointer" onClick={isEditable ? onEditClick : undefined}>
         <div className={`p-4 rounded-2xl border transition-all duration-300 
-          ${status === 'in_progress' && !isEditable
-            ? 'bg-indigo-50/80 border-indigo-200 shadow-lg shadow-indigo-100' 
+          ${isCurrentTimeSlot && !isEditable
+            ? 'bg-indigo-50/80 border-indigo-200 shadow-lg shadow-indigo-100' // FIXED HIGHLIGHT for Current Slot
             : 'bg-white border-slate-100 shadow-sm'
           }
           ${isEditable ? 'hover:border-indigo-300 active:scale-[0.99]' : ''}
@@ -90,7 +92,7 @@ const TaskRow = ({
                 {(!isEditing || isLocked) && <span className={`w-1.5 h-1.5 rounded-full ${dotColor} ${isCompleted ? 'opacity-50' : ''}`}></span>}
               </div>
               <p className={`font-semibold transition-colors 
-                ${status === 'in_progress' && !isEditable ? 'text-indigo-900' : 'text-slate-800'} 
+                ${isCurrentTimeSlot && !isEditable ? 'text-indigo-900' : 'text-slate-800'} 
                 ${isCompleted && !isEditable ? 'line-through text-slate-400' : ''}
               `}>
                 {title}
@@ -101,9 +103,7 @@ const TaskRow = ({
             <div className="flex gap-3 items-center">
               {isEditing ? (
                 // EDIT MODE
-                isLocked ? (
-                  null // Hide delete button for locked tasks
-                ) : (
+                isLocked ? null : (
                   <button 
                     onClick={(e) => { e.stopPropagation(); onDelete?.(); }}
                     className="w-8 h-8 rounded-full bg-rose-50 text-rose-500 hover:bg-rose-100 flex items-center justify-center transition-colors"
