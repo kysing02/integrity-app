@@ -43,15 +43,17 @@ const parseDurationToSeconds = (timeStr: string): number => {
 // --- Initial Data ---
 const INITIAL_SCHEDULE: TaskItem[] = [
   { id: 's1', title: "Wake Up", timeRange: "07:00", score: 100, status: "completed", category: "CONSISTENCY", icon: Sun, elapsedSeconds: 0 },
-  { id: 's2', title: "Deep Work", timeRange: "09:00 - 11:30", score: 96, status: "completed", category: "CONSISTENCY", icon: Brain, elapsedSeconds: 9000 }, // Example: Completed full time
-  { id: 's3', title: "Strategy Meeting", timeRange: "13:00 - 14:00", score: 98, status: "in_progress", category: "EFFICIENCY", icon: Users, elapsedSeconds: 600 }, // 10 mins in
-  { id: 's4', title: "Fitness", timeRange: "17:30 - 18:30", score: 0, status: "pending", category: "CONSISTENCY", icon: Dumbbell, elapsedSeconds: 0 },
+  { id: 's2', title: "Deep Work", timeRange: "09:00 - 11:30", score: 96, status: "completed", category: "CONSISTENCY", icon: Brain, elapsedSeconds: 9000 },
+  { id: 's3', title: "Strategy Meeting", timeRange: "13:00 - 14:00", score: 98, status: "in_progress", category: "EFFICIENCY", icon: Users, elapsedSeconds: 600 },
+  // UPDATED: Shortened time for debug
+  { id: 's4', title: "Fitness", timeRange: "17:30 - 17:31", score: 0, status: "pending", category: "CONSISTENCY", icon: Dumbbell, elapsedSeconds: 0 },
   { id: 's5', title: "Sleep", timeRange: "23:00", score: 0, status: "pending", category: "CONSISTENCY", icon: Moon, elapsedSeconds: 0 }
 ];
 
 const INITIAL_DAILY: TaskItem[] = [
-  { id: 'd1', title: "Study", timeRange: "1h 30m", score: 45, status: 'pending', category: 'CONSISTENCY', icon: Pencil, isDaily: true, elapsedSeconds: 2700 }, // 45 mins done
-  { id: 'd2', title: "Read", timeRange: "45m", score: 20, status: 'pending', category: 'CONSISTENCY', icon: BookOpen, isDaily: true, elapsedSeconds: 540 }, // 9 mins done
+  { id: 'd1', title: "Study", timeRange: "1h 30m", score: 45, status: 'pending', category: 'CONSISTENCY', icon: Pencil, isDaily: true, elapsedSeconds: 2700 },
+  // UPDATED: Shortened time for debug
+  { id: 'd2', title: "Read", timeRange: "1m", score: 20, status: 'pending', category: 'CONSISTENCY', icon: BookOpen, isDaily: true, elapsedSeconds: 0 }, 
   { id: 'd3', title: "Tidy Room", timeRange: "30m", score: 0, status: 'pending', category: 'EFFICIENCY', icon: Brush, isDaily: true, elapsedSeconds: 0 },
 ];
 
@@ -215,9 +217,14 @@ export default function Dashboard() {
   const orbHours = Math.floor(activeElapsed / 3600);
   const orbMinutes = Math.floor((activeElapsed % 3600) / 60);
   const orbSeconds = activeElapsed % 60; // NEW: Calculate seconds
+  // --- VISUAL THEME LOGIC ---
+  const isEfficiency = activeTask?.category === 'EFFICIENCY';
   
-  // Calculate Progress Percentage for Orb Ring
-  const orbProgress = activeTotalSeconds > 0 ? (activeElapsed / activeTotalSeconds) * 213 : 0; // 213 is strokeDasharray
+  // Colors
+  const orbRingColor = isEfficiency ? 'text-emerald-500' : 'text-indigo-500';
+  const orbTextColor = isEfficiency ? 'text-emerald-300' : 'text-indigo-300';
+  const orbShadowColor = isEfficiency ? 'shadow-emerald-900/20' : 'shadow-indigo-900/20';
+  const orbPillColor = isEfficiency ? 'bg-emerald-500/20 border-emerald-500/30' : 'bg-indigo-500/20 border-indigo-500/30';
 
   return (
     <main className="h-full w-full bg-slate-50 text-slate-900 font-sans relative overflow-hidden flex flex-col">
@@ -372,7 +379,8 @@ export default function Dashboard() {
                 <div className="grid grid-cols-4 gap-4">
                   {hasSchedule && dailyActions.map((action, index) => {
                     const totalSecs = parseDurationToSeconds(action.timeRange);
-                    const progressPct = totalSecs > 0 ? (action.elapsedSeconds / totalSecs) * 100 : 0;
+                    const rawProgress = totalSecs > 0 ? (action.elapsedSeconds / totalSecs) * 100 : 0;
+                    const progressPct = Math.min(rawProgress, 100);
 
                     return (
                       <TaskCircle 
@@ -439,52 +447,73 @@ export default function Dashboard() {
                 <span className="text-[9px] font-bold">Analytics</span>
               </button>
             </div>
-            {/* THE COMMAND ORB - LIVE DATA */}
+            {/* THE COMMAND ORB */}
             <div className="absolute left-1/2 -top-10 -translate-x-1/2 flex flex-col items-center z-50">
-              <div className="relative w-20 h-20 rounded-full bg-slate-900 border-4 border-slate-50 shadow-xl shadow-indigo-900/20 flex items-center justify-center mb-3">
+              <div className={`relative w-20 h-20 rounded-full bg-slate-900 border-4 border-slate-50 shadow-xl ${orbShadowColor} flex items-center justify-center mb-3`}>
                 <div className="absolute inset-1 rounded-full border-4 border-slate-800" />
                 <svg className="absolute inset-0 transform -rotate-90 w-full h-full p-1" viewBox="0 0 80 80">
                     <circle cx="40" cy="40" r="34" stroke="transparent" strokeWidth="4" fill="none" />
-                    <circle 
-                      cx="40" cy="40" r="34" stroke="currentColor" strokeWidth="4" fill="none" 
-                      strokeDasharray="213" 
-                      // LIVE PROGRESS
-                      strokeDashoffset={activeTask ? (213 - orbProgress) : 213} 
-                      className={`${activeTask ? 'text-indigo-500' : 'text-slate-700'} transition-all duration-1000 ease-in-out`} 
-                      strokeLinecap="round" 
-                    />
+                    {/* PROGRESS RING */}
+                    {(() => {
+                        const circumference = 213;
+                        // For Efficiency: Always 100% (dashOffset = 0)
+                        // For Consistency: Calculate normal progress
+                        let dashOffset = 213; // Default empty
+                        
+                        if (activeTask) {
+                          if (isEfficiency) {
+                            dashOffset = 0; // 100% Filled
+                          } else {
+                            const rawProgress = activeTotalSeconds > 0 ? (activeElapsed / activeTotalSeconds) * circumference : 0;
+                            const clampedProgress = Math.min(rawProgress, circumference);
+                            dashOffset = circumference - clampedProgress;
+                          }
+                        }
+                        
+                        return (
+                          <circle 
+                            cx="40" cy="40" r="34" stroke="currentColor" strokeWidth="4" fill="none" 
+                            strokeDasharray={circumference} 
+                            strokeDashoffset={Math.max(0, dashOffset)} 
+                            className={`${activeTask ? orbRingColor : 'text-slate-700'} transition-all duration-1000 ease-in-out`} 
+                            strokeLinecap="round" 
+                          />
+                        );
+                    })()}
                 </svg>
+                
                 <div className="relative flex flex-col items-center justify-center text-white z-20 mt-0.5">
                     {activeTask ? (
-                      <activeTask.icon size={18} className="text-indigo-300 animate-pulse" />
+                      <activeTask.icon size={18} className={`${orbTextColor} animate-pulse`} />
                     ) : (
                       <Play size={18} className="text-slate-500" />
                     )}
                     
                     {activeTask ? (
                       <div className="flex items-baseline gap-[1px]">
-                        {/* LIVE HOURS & MINUTES */}
                         {/* HOURS */}
                         {orbHours > 0 && (
                           <>
                             <span className="text-[10px] font-black tracking-tighter">{orbHours}</span>
-                            <span className="text-[10px] font-bold text-indigo-300 mr-0.5">h</span>
+                            <span className={`text-[10px] font-bold ${orbTextColor} mr-0.5`}>h</span>
                           </>
                         )}
                         {/* MINUTES */}
                         <span className="text-[10px] font-black tracking-tighter">{orbMinutes}</span>
-                        <span className="text-[10px] font-bold text-indigo-300 mr-0.5">m</span>
+                        <span className={`text-[10px] font-bold ${orbTextColor} mr-0.5`}>m</span>
                         
-                        {/* SECONDS (NEW) */}
+                        {/* SECONDS */}
                         <span className="text-[10px] font-black tracking-tighter">{orbSeconds}</span>
-                        <span className="text-[10px] font-bold text-indigo-300">s</span>
+                        <span className={`text-[10px] font-bold ${orbTextColor}`}>s</span>
                       </div>
                     ) : (
                       <span className="text-[10px] font-bold text-slate-500">IDLE</span>
                     )}
                 </div>
               </div>
-              <div className={`px-3 py-1 rounded-full shadow-sm backdrop-blur-md border ${activeTask ? 'bg-indigo-500/20 border-indigo-500/30' : 'bg-slate-800/50 border-slate-700'}`}>
+              
+              {/* LABEL */}
+              <div className={`px-3 py-1 rounded-full shadow-sm backdrop-blur-md border ${activeTask ? orbPillColor : 'bg-slate-800/50 border-slate-700'}`}>
                  <span className={`text-[9px] font-black uppercase tracking-widest block ${activeTask ? 'text-white animate-pulse' : 'text-white'}`}>
                    {activeTask ? 'Tracking' : 'Ready'}
                  </span>
