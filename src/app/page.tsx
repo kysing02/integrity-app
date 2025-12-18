@@ -177,6 +177,32 @@ export default function Dashboard() {
   };
   const handleDrop = () => setDraggedItemIndex(null);
 
+  const handleToggleComplete = (id: string, isDailyAction: boolean) => {
+    if (isEditing || isEditingActions) return;
+
+    const toggleList = (list: TaskItem[]) => list.map(t => {
+      if (t.id === id) {
+        // Toggle Logic:
+        // 1. If currently running -> Stop timer AND mark complete
+        // 2. If completed -> Revert to pending (Undo)
+        // 3. If pending -> Mark complete
+        
+        const newStatus = t.status === 'completed' ? 'pending' : 'completed';
+        
+        // If we are completing a running task, we might want to capture the final time here?
+        // For now, we just switch status.
+        return { ...t, status: newStatus } as TaskItem;
+      }
+      return t;
+    });
+
+    if (isDailyAction) {
+      setDailyActions(prev => toggleList(prev));
+    } else {
+      setScheduleTasks(prev => toggleList(prev));
+    }
+  };
+  
   // Pill State
   const pillState = (() => {
     if (hasSchedule) return { text: "Next: Meeting in 45m", color: "text-indigo-500 border-indigo-100 bg-white" };
@@ -202,7 +228,12 @@ export default function Dashboard() {
               <span>{pillState.text}</span>
             </div>
 
-            <TimelineRibbon showCurrentTime={hasSchedule} />
+            {/* 2. CONSISTENT RIBBON */}
+            {/* UPDATED: Pass the tasks prop */}
+            <TimelineRibbon 
+              showCurrentTime={hasSchedule} 
+              tasks={hasSchedule ? scheduleTasks : []} 
+            />
 
             <div className="px-6 mt-4">
               <section className="mb-10">
@@ -229,6 +260,7 @@ export default function Dashboard() {
                             category={task.category} icon={task.icon} isLast={index === scheduleTasks.length - 1}
                             isEditing={isEditing} isLocked={isTaskLocked} isCurrentTimeSlot={isCurrentSlot}
                             onDelete={() => handleDeleteTask(task.id)} onInsert={() => handleInsertTask(index)}
+                            onToggleComplete={() => handleToggleComplete(task.id, false)}
                           />
                         </div>
                       );
@@ -286,6 +318,8 @@ export default function Dashboard() {
                         onDragStart={() => handleDragStart(index)} 
                         onDragOver={(e) => handleDragOver(e, index)} 
                         onDrop={handleDrop}
+                        isCompleted={action.status === 'completed'}
+                        onLongPress={() => handleToggleComplete(action.id, true)}
                       />
                     );
                   })}

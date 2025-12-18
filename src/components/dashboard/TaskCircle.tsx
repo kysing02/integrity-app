@@ -1,56 +1,78 @@
-import React from 'react';
-import { LucideIcon, X } from 'lucide-react';
+import React, { useRef } from 'react';
+import { LucideIcon, X, Check } from 'lucide-react'; // Added Check icon
 
 interface TaskCircleProps {
   id?: string;
   title: string;
   duration: string;
   Icon: LucideIcon;
-  bgColor?: string; // Kept for backward compatibility, but largely overridden by category logic
+  bgColor?: string; 
   isActive?: boolean;
   onClick?: () => void;
   
-  // New Props for Logic
   category?: 'EFFICIENCY' | 'CONSISTENCY';
-  progress?: number; // 0 to 100
+  progress?: number; 
+  isCompleted?: boolean; // NEW PROP: Visual state for completion
   
-  // Edit & Drag Props
   isEditing?: boolean;
   onDelete?: () => void;
   onDragStart?: (e: React.DragEvent) => void;
   onDragOver?: (e: React.DragEvent) => void;
   onDrop?: (e: React.DragEvent) => void;
+  
+  // NEW: Long Press Handler
+  onLongPress?: () => void;
 }
 
 const TaskCircle = ({ 
   title, duration, Icon, bgColor = "bg-slate-50", isActive, onClick,
-  category = 'CONSISTENCY', progress = 0,
-  isEditing, onDelete, onDragStart, onDragOver, onDrop
+  category = 'CONSISTENCY', progress = 0, isCompleted = false,
+  isEditing, onDelete, onDragStart, onDragOver, onDrop, onLongPress
 }: TaskCircleProps) => {
   
-  // LOGIC: Efficiency tasks (Tidy Room) are always "Full Circle" (100%)
-  // Consistency tasks (Study) show actual progress
-  const finalProgress = category === 'EFFICIENCY' ? 100 : progress;
-  
-  // COLOR LOGIC
-  const themeColor = category === 'EFFICIENCY' ? 'text-emerald-500' : 'text-indigo-500';
-  const ringColor = category === 'EFFICIENCY' ? 'text-emerald-400' : 'text-indigo-400';
-  const bgClass = category === 'EFFICIENCY' ? 'bg-emerald-50' : 'bg-indigo-50';
+  const timerRef = useRef<NodeJS.Timeout | null>(null);
 
-  // SVG Math for w-16 h-16 (64px)
-  // Center (32,32), Radius 28, Stroke 3
-  const radius = 28;
+  // --- Long Press Logic ---
+  const handlePointerDown = () => {
+    if (isEditing) return;
+    timerRef.current = setTimeout(() => {
+      if (onLongPress) onLongPress();
+    }, 600); // 600ms threshold
+  };
+
+  const handlePointerUp = () => {
+    if (timerRef.current) {
+      clearTimeout(timerRef.current);
+      timerRef.current = null;
+    }
+  };
+
+  const handleClick = () => {
+    if (!isEditing && onClick) onClick();
+  };
+
+  // Visual Overrides for Completed State
+  const finalProgress = isCompleted ? 100 : (category === 'EFFICIENCY' ? 100 : progress);
+  const themeColor = category === 'EFFICIENCY' ? 'text-emerald-500' : 'text-indigo-500';
+  const ringColor = isCompleted ? 'text-emerald-400' : (category === 'EFFICIENCY' ? 'text-emerald-400' : 'text-indigo-400');
+  const bgClass = isCompleted ? 'bg-emerald-50' : (category === 'EFFICIENCY' ? 'bg-emerald-50' : 'bg-indigo-50');
+
+  // SVG Math (cx=30, cy=30, r=28)
+  const radius = 28; 
   const circumference = 2 * Math.PI * radius;
   const strokeDashoffset = circumference - (finalProgress / 100) * circumference;
 
   return (
     <div 
-      onClick={!isEditing ? onClick : undefined} 
+      onPointerDown={handlePointerDown}
+      onPointerUp={handlePointerUp}
+      onPointerLeave={handlePointerUp}
+      onClick={handleClick}
       draggable={isEditing}
       onDragStart={onDragStart}
       onDragOver={onDragOver}
       onDrop={onDrop}
-      className={`relative flex flex-col items-center gap-3 group flex-shrink-0 snap-center transition-all duration-300 ${isEditing ? 'cursor-grab active:cursor-grabbing' : 'cursor-pointer'}`}
+      className={`relative flex flex-col items-center gap-3 group flex-shrink-0 snap-center transition-all duration-300 ${isEditing ? 'cursor-grab active:cursor-grabbing' : 'cursor-pointer'} ${isCompleted ? 'opacity-70 grayscale-[0.3]' : ''}`}
     >
       {/* DELETE BUTTON */}
       {isEditing && (
@@ -70,36 +92,23 @@ const TaskCircle = ({
         }
       `}>
         
-        {/* PROGRESS RING SVG */}
+        {/* PROGRESS RING */}
         <svg className="absolute inset-0 transform -rotate-90 w-full h-full p-0.5">
-           {/* Track */}
-           <circle 
-             cx="30" cy="30" r={radius} 
-             stroke="currentColor" 
-             strokeWidth="3" 
-             fill="transparent" 
-             className={`${isActive ? 'text-white/20' : 'text-slate-200'}`} 
-           />
-           {/* Progress */}
-           <circle 
-             cx="30" cy="30" r={radius} 
-             stroke="currentColor" 
-             strokeWidth="3" 
-             fill="transparent" 
-             strokeDasharray={circumference} 
-             strokeDashoffset={strokeDashoffset} 
-             strokeLinecap="round"
-             className={`transition-all duration-1000 ease-in-out ${isActive ? 'text-white' : ringColor}`} 
-           />
+           <circle cx="30" cy="30" r={radius} stroke="currentColor" strokeWidth="3" fill="transparent" className={`${isActive ? 'text-white/20' : 'text-slate-200'}`} />
+           <circle cx="30" cy="30" r={radius} stroke="currentColor" strokeWidth="3" fill="transparent" strokeDasharray={circumference} strokeDashoffset={strokeDashoffset} strokeLinecap="round" className={`transition-all duration-1000 ease-in-out ${isActive ? 'text-white' : ringColor}`} />
         </svg>
 
-        {/* ICON */}
-        <Icon size={24} className={`relative z-10 ${isActive ? 'text-white' : 'text-slate-700'}`} />
+        {/* ICON or CHECK */}
+        {isCompleted ? (
+           <Check size={24} className={isActive ? 'text-white' : 'text-emerald-600'} strokeWidth={3} />
+        ) : (
+           <Icon size={24} className={`relative z-10 ${isActive ? 'text-white' : 'text-slate-700'}`} />
+        )}
       </div>
       
-      {/* TEXT LABELS */}
+      {/* TEXT */}
       <div className="text-center">
-        <p className={`text-xs font-bold ${isActive ? themeColor : 'text-slate-800'}`}>{title}</p>
+        <p className={`text-xs font-bold ${isActive ? themeColor : 'text-slate-800'} ${isCompleted ? 'line-through text-slate-400' : ''}`}>{title}</p>
         <p className="text-[10px] font-medium text-slate-400">{duration}</p>
       </div>
     </div>

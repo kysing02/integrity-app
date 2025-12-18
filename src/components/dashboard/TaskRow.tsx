@@ -1,4 +1,4 @@
-import { Play, CheckCircle2, X, Plus, LucideIcon } from 'lucide-react';
+import { Play, CheckCircle2, X, Plus, LucideIcon, Check } from 'lucide-react';
 import ProgressCircle from './ProgressCircle';
 
 interface TaskRowProps {
@@ -14,23 +14,24 @@ interface TaskRowProps {
   // Edit Props
   isEditing?: boolean;
   isLocked?: boolean; 
-  // NEW PROP
-  isCurrentTimeSlot?: boolean; // Controls the "Current Schedule" highlight
+  isCurrentTimeSlot?: boolean; 
   
   onDelete?: () => void;
   onInsert?: () => void;
   onEditClick?: () => void;
+  
+  // NEW: Completion Handler
+  onToggleComplete?: () => void;
 }
 
 const TaskRow = ({ 
   title, timeRange, score, status, category = 'CONSISTENCY', isLast, icon: Icon,
-  isEditing, isLocked, isCurrentTimeSlot, onDelete, onInsert, onEditClick
+  isEditing, isLocked, isCurrentTimeSlot, onDelete, onInsert, onEditClick, onToggleComplete
 }: TaskRowProps) => {
   
   const isEditable = isEditing && !isLocked;
 
   // Determine Colors
-  // LOGIC CHANGE: If it's the current time slot, force Green Ring (Emerald), otherwise follow status
   let ringColor = status === 'pending' ? 'text-slate-200' : (score < 90 ? 'text-amber-500' : 'text-emerald-500');
   if (isCurrentTimeSlot) ringColor = 'text-emerald-500';
 
@@ -45,7 +46,7 @@ const TaskRow = ({
   // Final Visuals
   const finalRingColor = isEditable ? editRingColor : ringColor;
   const finalIconColor = isEditable ? editIconColor : iconColor;
-  const finalProgress = isEditable ? 100 : (status === 'pending' && !isCurrentTimeSlot ? 0 : (isCurrentTimeSlot ? 0 : score)); // Keep 0% if current but not started, or change logic if you want 100%
+  const finalProgress = isEditable ? 100 : (status === 'pending' && !isCurrentTimeSlot ? 0 : (isCurrentTimeSlot ? 0 : score)); 
 
   const shouldFade = isCompleted || (isEditing && isLocked);
 
@@ -66,18 +67,39 @@ const TaskRow = ({
         </div>
       )}
       
-      {/* Left Column: Icon Circle */}
-      <div className="flex flex-col items-center pt-2 z-10">
-         <ProgressCircle size={48} progress={finalProgress} color={finalRingColor}>
-            <Icon size={20} className={finalIconColor} />
-         </ProgressCircle>
-      </div>
+      {/* Left Column: Icon Circle (NOW CLICKABLE FOR COMPLETION) */}
+      <button 
+        onClick={(e) => {
+          e.stopPropagation(); // Prevent triggering the timer
+          if (!isEditing && onToggleComplete) onToggleComplete();
+        }}
+        disabled={isEditing}
+        className="flex flex-col items-center pt-2 z-10 outline-none group/circle"
+      >
+         <div className="relative">
+           <ProgressCircle size={48} progress={finalProgress} color={finalRingColor}>
+              {/* Show Check Icon on Hover (Desktop) or if Completed */}
+              {isCompleted && !isEditing ? (
+                 <Check size={20} className="text-emerald-600" strokeWidth={3} />
+              ) : (
+                 <Icon size={20} className={`${finalIconColor} group-hover/circle:opacity-0 transition-opacity`} />
+              )}
+           </ProgressCircle>
+           
+           {/* Hover "Check" Overlay for Pending Tasks (UX Hint) */}
+           {!isCompleted && !isEditing && (
+             <div className="absolute inset-0 flex items-center justify-center opacity-0 group-hover/circle:opacity-100 transition-opacity">
+                <Check size={20} className="text-emerald-400" />
+             </div>
+           )}
+         </div>
+      </button>
 
-      {/* Right Column: Card */}
+      {/* Right Column: Card (Timer Trigger) */}
       <div className="flex-grow mb-6 group cursor-pointer" onClick={isEditable ? onEditClick : undefined}>
         <div className={`p-4 rounded-2xl border transition-all duration-300 
           ${isCurrentTimeSlot && !isEditable
-            ? 'bg-indigo-50/80 border-indigo-200 shadow-lg shadow-indigo-100' // FIXED HIGHLIGHT for Current Slot
+            ? 'bg-indigo-50/80 border-indigo-200 shadow-lg shadow-indigo-100' 
             : 'bg-white border-slate-100 shadow-sm'
           }
           ${isEditable ? 'hover:border-indigo-300 active:scale-[0.99]' : ''}
