@@ -33,7 +33,7 @@ const INITIAL_SCHEDULE: TaskItem[] = [
 const INITIAL_DAILY: TaskItem[] = [
   { id: 'd1', title: "Study", timeRange: "1h 30m", score: 0, status: 'pending', category: 'CONSISTENCY', icon: Pencil, isDaily: true },
   { id: 'd2', title: "Read", timeRange: "45m", score: 0, status: 'pending', category: 'CONSISTENCY', icon: BookOpen, isDaily: true },
-  { id: 'd3', title: "Admin", timeRange: "30m", score: 0, status: 'pending', category: 'EFFICIENCY', icon: Brush, isDaily: true },
+  { id: 'd3', title: "Tidy Room", timeRange: "30m", score: 0, status: 'pending', category: 'EFFICIENCY', icon: Brush, isDaily: true },
 ];
 
 export default function Dashboard() {
@@ -50,6 +50,10 @@ export default function Dashboard() {
   const [draggedItemIndex, setDraggedItemIndex] = useState<number | null>(null);
 
   const activeTask = [...scheduleTasks, ...dailyActions].find(t => t.status === 'in_progress');
+
+  // MOCK TIMER DATA (We will make this real in the next step)
+  const hours = 1; 
+  const minutes = 12;
 
   // --- Handlers ---
 
@@ -311,7 +315,9 @@ export default function Dashboard() {
                       title={action.title} 
                       duration={action.timeRange} 
                       Icon={action.icon} 
-                      bgColor={action.category === 'CONSISTENCY' ? "bg-indigo-50" : "bg-emerald-50"}
+                      category={action.category} 
+                      // FIX: Use action.score if not active, so we see saved progress
+                      progress={action.score} 
                       isActive={action.status === 'in_progress'}
                       onClick={() => handleToggleTask(action.id, true)}
                       
@@ -366,6 +372,7 @@ export default function Dashboard() {
                 <span className="text-[9px] font-bold">Analytics</span>
               </button>
             </div>
+            {/* THE COMMAND ORB - UPDATED UI */}
             <div className="absolute left-1/2 -top-10 -translate-x-1/2 flex flex-col items-center z-50">
               <div className="relative w-20 h-20 rounded-full bg-slate-900 border-4 border-slate-50 shadow-xl shadow-indigo-900/20 flex items-center justify-center mb-3">
                 <div className="absolute inset-1 rounded-full border-4 border-slate-800" />
@@ -388,7 +395,14 @@ export default function Dashboard() {
                     
                     {activeTask ? (
                       <div className="flex items-baseline gap-[1px]">
-                        <span className="text-[10px] font-black tracking-tighter">12</span>
+                        {/* HOURS LOGIC */}
+                        {hours > 0 && (
+                          <>
+                            <span className="text-[10px] font-black tracking-tighter">{hours}</span>
+                            <span className="text-[10px] font-bold text-indigo-300 mr-0.5">h</span>
+                          </>
+                        )}
+                        <span className="text-[10px] font-black tracking-tighter">{minutes}</span>
                         <span className="text-[10px] font-bold text-indigo-300">m</span>
                       </div>
                     ) : (
