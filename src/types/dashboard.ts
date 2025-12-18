@@ -10,4 +10,19 @@ export interface TaskItem {
   icon: any; // Using any for simplicity with Lucide icons in state
   isDaily?: boolean;
   elapsedSeconds: number;
+  wasScheduled?: boolean; 
+  originalTimeRange?: string;
+}
+
+export interface TimerEvent {
+  id: string;
+  taskId: string;
+  action: 'START' | 'STOP';
+  timestamp: number; // Unix timestamp
+}
+
+export interface DayLog {
+  date: string;
+  originalSchedule: TaskItem[]; // Snapshot taken at "Start Day"
+  events: TimerEvent[];
 }

@@ -13,6 +13,7 @@ import TaskCircle from '@/components/dashboard/TaskCircle';
 import DashboardNavbar from '@/components/dashboard/DashboardNavbar';
 import DashboardHeader from '@/components/dashboard/DashboardHeader';
 import TaskEditorModal from '@/components/dashboard/TaskEditorModal';
+import DaySummaryModal from '@/components/dashboard/DaySummaryModal'; // IMPORT THIS
 
 // Hooks & Utils
 import { useDashboard } from '@/hooks/useDashboard';
@@ -58,6 +59,16 @@ export default function Dashboard() {
              actions.deleteTask(state.modalConfig.initialData.id, state.modalConfig.type === 'daily');
            }
         }}
+      />
+      <DaySummaryModal 
+        isOpen={state.isSummaryOpen}
+        onClose={() => actions.setIsSummaryOpen(false)}
+        onConfirmEnd={actions.confirmEndDay}
+        events={state.timerEvents}
+        // Pass combined tasks so the report knows titles for both Schedule and Daily Actions
+        tasks={[...state.scheduleTasks, ...state.dailyActions]}
+        checkInTime={state.checkInTime}
+        currentDate={helpers.getNow()}
       />
       <div className="scroller flex-1 overflow-y-auto overflow-x-hidden no-scrollbar">
         <div className="min-h-[101%] pb-48"> 

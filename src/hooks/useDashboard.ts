@@ -4,11 +4,11 @@ import { useState, useEffect, useMemo } from 'react';
 import { 
   Brain, Users, Dumbbell, Sun, Pencil, BookOpen, Brush, Sparkles 
 } from 'lucide-react';
-import { TaskItem } from '@/types/dashboard';
+import { TimerEvent, TaskItem } from '@/types/dashboard';
 import { parseDurationToSeconds, getTaskRemainingSeconds, getTodayDateAtTime } from '@/lib/timeUtils';
 
 // --- DEBUG CONFIG ---
-const DEBUG_TIME = "13:30"; 
+const DEBUG_TIME = null; 
 
 // --- INITIAL DATA ---
 const INITIAL_SCHEDULE: TaskItem[] = [
@@ -46,6 +46,10 @@ export function useDashboard() {
   const [modalConfig, setModalConfig] = useState<ModalConfig>({
       isOpen: false, mode: 'add', type: 'schedule'
   });
+  const [timerEvents, setTimerEvents] = useState<TimerEvent[]>([]);
+  const [originalSchedule, setOriginalSchedule] = useState<TaskItem[]>([]);
+  const [isSummaryOpen, setIsSummaryOpen] = useState(false);
+
   // --- HYDRATION ---
   useEffect(() => {
     const d = new Date(); d.setHours(7, 0, 0, 0); setCheckInTime(d);
@@ -139,11 +143,41 @@ export function useDashboard() {
   }, [dayStatus, hasSchedule, scheduleTasks, dailyActions]); // Dependency array roughly correct, technically needs 'now' but that updates via timer/re-renders
 
   // --- ACTIONS ---
-  const startDay = () => { setDayStatus('active'); setCheckInTime(getNow()); };
-  const endDay = () => { if (confirm("End your day?")) setDayStatus('completed'); };
+  const startDay = () => {
+    setDayStatus('active');
+    setCheckInTime(getNow());
+    // 1. SNAPSHOT THE PLAN
+    // We deep copy the tasks so future edits don't change the "Original Plan"
+    setOriginalSchedule(JSON.parse(JSON.stringify(scheduleTasks)));
+  };
+
+  const endDay = () => {
+    // Open the summary modal instead of just finishing
+    setIsSummaryOpen(true);
+  };
   
+  // 2. CONFIRMING IN MODAL -> Actually finishes day
+  const confirmEndDay = () => {
+    setDayStatus('completed');
+    setIsSummaryOpen(false);
+  };
+
   const toggleTask = (id: string, isDaily: boolean) => {
     if (isEditing || isEditingActions) return;
+
+    const now = getNow().getTime();
+
+    // 2. LOG THE EVENT
+    const targetList = isDaily ? dailyActions : scheduleTasks;
+    const task = targetList.find(t => t.id === id);
+    if (task) {
+      const newAction: 'START' | 'STOP' = task.status === 'in_progress' ? 'STOP' : 'START';
+      setTimerEvents(prev => [
+        ...prev, 
+        { id: Math.random().toString(), taskId: id, action: newAction, timestamp: now }
+      ]);
+    }
+
     const toggler = (list: TaskItem[]) => list.map(t => {
       if (t.id === id) return { ...t, status: t.status === 'in_progress' ? 'pending' : 'in_progress' } as TaskItem;
       if (t.status === 'in_progress') return { ...t, status: 'pending' } as TaskItem;
@@ -266,7 +300,8 @@ export function useDashboard() {
     state: {
       dayStatus, checkInTime, hasSchedule, isEditing, isEditingActions,
       scheduleTasks, dailyActions, flexCapacitySeconds, activeTask, totalVolumeSeconds,
-      pillState, debugTime: DEBUG_TIME, modalConfig
+      pillState, debugTime: DEBUG_TIME, modalConfig,
+      isSummaryOpen, timerEvents, originalSchedule
     },
     actions: {
       startDay, endDay, setHasSchedule, setIsEditing, setIsEditingActions,
@@ -274,7 +309,9 @@ export function useDashboard() {
       openAddDaily,
       openEditTask,
       saveTask,
-      closeModal
+      closeModal,
+      setIsSummaryOpen,
+      confirmEndDay
     },
     helpers: { isTimeInPast, getNow }
   };
