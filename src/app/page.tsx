@@ -223,7 +223,7 @@ export default function Dashboard() {
                     </div>
                     
                     <div className="grid grid-cols-4 gap-4">
-                      {state.hasSchedule && state.dailyActions.map((action, index) => {
+                      {state.dailyActions.map((action, index) => {
                         const totalSecs = parseDurationToSeconds(action.timeRange);
                         const rawProgress = totalSecs > 0 ? (action.elapsedSeconds / totalSecs) * 100 : 0;
                         return (

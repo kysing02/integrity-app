@@ -3,24 +3,30 @@ import React, { useState, useEffect } from 'react';
 interface FlexBucketProps {
   totalVolumeSeconds: number;
   flexCapacitySeconds: number;
-  workLeftSeconds: number; // NEW PROP
+  workLeftSeconds: number;
 }
 
 const FlexBucket = ({ totalVolumeSeconds, flexCapacitySeconds, workLeftSeconds }: FlexBucketProps) => {
   
   const isOvertime = flexCapacitySeconds < 0;
-  
-  // --- ETA CALCULATION ---
   const [etaString, setEtaString] = useState("");
 
+  // --- ETA LIVE UPDATE ---
   useEffect(() => {
-    // We calculate ETA client-side to keep it synced with "Now"
-    const now = new Date();
-    // Add remaining work seconds to current time
-    const finishTime = new Date(now.getTime() + workLeftSeconds * 1000);
+    const updateEta = () => {
+      const now = new Date();
+      // ETA = "Right Now" + "How much work I have left"
+      const finishTime = new Date(now.getTime() + workLeftSeconds * 1000);
+      setEtaString(finishTime.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: false }));
+    };
+
+    updateEta(); // Run immediately
     
-    setEtaString(finishTime.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: false }));
-  }, [workLeftSeconds]); // Update whenever work left changes
+    // Update every minute so the time doesn't get "stuck"
+    const interval = setInterval(updateEta, 60000); 
+    
+    return () => clearInterval(interval);
+  }, [workLeftSeconds]); 
 
   // --- BAR LOGIC ---
   let percentage = 0;
@@ -67,22 +73,17 @@ const FlexBucket = ({ totalVolumeSeconds, flexCapacitySeconds, workLeftSeconds }
         </div>
       </div>
       
-      {/* Footer: Capacity + ETA */}
+      {/* Footer */}
       <div className={`flex justify-between items-center text-[10px] font-bold px-3 py-1.5 rounded-lg border mt-1 ${isOvertime ? 'bg-rose-50 border-rose-100' : 'bg-slate-50 border-slate-100'}`}>
         <span className={`${isOvertime ? 'text-rose-400' : 'text-slate-400'} uppercase tracking-wider`}>
             {isOvertime ? 'Capacity Exceeded' : 'Remaining Capacity'}
         </span>
         
-        {/* RIGHT SIDE: Time + ETA */}
         <div className="text-right flex items-center gap-1.5">
            <span className={`${isOvertime ? 'text-rose-600' : (flexCapacitySeconds < 3600 ? 'text-amber-500' : 'text-emerald-600')}`}>
               {isOvertime ? `Over by ${formatTime(flexCapacitySeconds)}` : `${formatTime(flexCapacitySeconds)} left`}
            </span>
-           
-           {/* SEPARATOR DOT */}
            <span className={`w-1 h-1 rounded-full ${isOvertime ? 'bg-rose-300' : 'bg-slate-300'}`} />
-           
-           {/* EXPECTED FINISH */}
            <span className={`${isOvertime ? 'text-rose-400' : 'text-slate-400'}`}>
               Finish ~{etaString}
            </span>
