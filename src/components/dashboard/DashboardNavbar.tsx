@@ -14,7 +14,7 @@ const DashboardNavbar = ({ activeTask }: DashboardNavbarProps) => {
   
   const orbHours = Math.floor(activeElapsed / 3600);
   const orbMinutes = Math.floor((activeElapsed % 3600) / 60);
-  const orbSeconds = activeElapsed % 60; 
+  const orbSeconds = activeElapsed % 60;
   
   // --- VISUAL THEME LOGIC ---
   const isEfficiency = activeTask?.category === 'EFFICIENCY';

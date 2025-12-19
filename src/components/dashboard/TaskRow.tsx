@@ -10,7 +10,7 @@ interface TaskRowProps {
   status: 'pending' | 'in_progress' | 'completed';
   category?: 'EFFICIENCY' | 'CONSISTENCY';
   isLast?: boolean;
-  icon: any; // Relaxed type to prevent crashes
+  icon: any; 
   variant?: 'task' | 'marker'; 
 
   // Edit Props
@@ -53,23 +53,25 @@ const TaskRow = ({
   };
 
   // --- COLOR LOGIC ---
-  let ringColor = 'text-slate-200';
-  let iconColor = 'text-slate-300';
-  let dotColor = 'bg-slate-300';
+  // FIX 2: Default Colors are now Category-based, even in ReadOnly
+  let ringColor = isEfficiency ? 'text-emerald-500' : 'text-indigo-500';
+  let iconColor = isEfficiency ? 'text-emerald-600' : 'text-indigo-600';
+  let dotColor = isEfficiency ? 'bg-emerald-400' : 'bg-indigo-400';
   
   const plusBg = isEfficiency ? 'bg-emerald-100' : 'bg-indigo-100';
   const plusText = isEfficiency ? 'text-emerald-600' : 'text-indigo-600';
   const checkColor = category === 'CONSISTENCY' ? 'text-indigo-600' : 'text-emerald-600';
 
   if (!isMarker) {
-    if (isEditable || status !== 'pending') {
-       ringColor = isEfficiency ? 'text-emerald-500' : 'text-indigo-500';
-       iconColor = isEfficiency ? 'text-emerald-600' : 'text-indigo-600';
-    } else {
+    // If NOT ReadOnly and NOT Active, dim it (Pending State)
+    if (!readOnly && !isEditable && status === 'pending') {
        ringColor = isCurrentTimeSlot ? 'text-emerald-500' : 'text-slate-200';
        iconColor = isCurrentTimeSlot ? 'text-emerald-600' : 'text-slate-300';
     }
-    dotColor = category === 'CONSISTENCY' ? 'bg-indigo-400' : 'bg-emerald-400';
+  } else {
+    ringColor = 'text-slate-200'; 
+    iconColor = 'text-slate-300';
+    dotColor = 'bg-slate-200';
   }
 
   // --- READ ONLY LOGIC ---
@@ -79,17 +81,19 @@ const TaskRow = ({
   if (readOnly && !isMarker) {
     const plannedSecs = parseDurationToSeconds(timeRange);
     
-    // FIX 2: Show actual progress % in the ring instead of 100%
+    // Progress Ring Logic
     if (plannedSecs > 0) {
       finalProgress = Math.min((actualSeconds / plannedSecs) * 100, 100);
     } else if (actualSeconds > 0) {
-      finalProgress = 100; // Unplanned but done
+      finalProgress = 100; 
     } else {
       finalProgress = 0;
     }
 
-    // Badge Logic
-    if (plannedSecs > 0 && actualSeconds > 0) {
+    // --- FIX 3: BADGE COLORS ---
+    
+    // 1. Success: Met the plan
+    if (plannedSecs > 0 && actualSeconds >= plannedSecs) {
       resultBadge = (
         <div className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-emerald-50 border border-emerald-100">
            <span className="text-xs font-bold text-emerald-700">
@@ -97,19 +101,34 @@ const TaskRow = ({
            </span>
         </div>
       );
-    } else if (plannedSecs > 0 && actualSeconds === 0) {
+    } 
+    // 2. Under-performed: Did some work, but less than plan -> RED BG
+    else if (plannedSecs > 0 && actualSeconds > 0 && actualSeconds < plannedSecs) {
+      resultBadge = (
+        <div className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-rose-50 border border-rose-100">
+           <span className="text-xs font-bold text-rose-500">
+             {formatShortDur(actualSeconds)} <span className="text-rose-300">/</span> <span className="opacity-60">{formatShortDur(plannedSecs)}</span>
+           </span>
+        </div>
+      );
+    }
+    // 3. Missed: Planned but 0 actual -> RED BG
+    else if (plannedSecs > 0 && actualSeconds === 0) {
        resultBadge = (
         <div className="px-3 py-1.5 rounded-lg bg-rose-50 border border-rose-100">
            <span className="text-xs font-bold text-rose-500">Missed</span>
         </div>
       );
-    } else if (actualSeconds > 0) {
+    } 
+    // 4. Unplanned: No plan, but did work -> INDIGO
+    else if (actualSeconds > 0) {
        resultBadge = (
         <div className="px-3 py-1.5 rounded-lg bg-indigo-50 border border-indigo-100">
            <span className="text-xs font-bold text-indigo-600">{formatShortDur(actualSeconds)}</span>
         </div>
       );
-    } else {
+    } 
+    else {
         resultBadge = <span className="text-slate-300 font-bold text-xs">--</span>;
     }
   }
@@ -145,16 +164,12 @@ const TaskRow = ({
       
       <div className={`flex flex-col items-center pt-2 z-10 ${readOnly ? 'cursor-default' : ''}`}>
          <div className="relative">
-           <ProgressCircle size={48} progress={finalProgress} color={readOnly && !isCompleted ? 'text-slate-200' : ringColor}>
-              
-              {/* FIX 2: Only show Check if ACTUALLY completed. Removed "|| readOnly". */}
+           <ProgressCircle size={48} progress={finalProgress} color={readOnly && !isCompleted && finalProgress === 0 ? 'text-slate-200' : ringColor}>
               {isCompleted && !isMarker ? (
                  <Check size={20} className={checkColor} strokeWidth={3} />
               ) : (
-                 // FIX 1: Removed strict 'typeof' check. Just render Icon if it exists.
                  Icon ? <Icon size={20} className={iconColor} /> : <div className="w-5 h-5" />
               )}
-
            </ProgressCircle>
          </div>
       </div>

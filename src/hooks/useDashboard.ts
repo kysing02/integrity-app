@@ -110,7 +110,7 @@ export function useDashboard() {
   // --- PILL STATE LOGIC ---
   const pillState = useMemo(() => {
     if (dayStatus === 'sleeping') return { text: "Ready for your day?", color: "text-slate-500 border-slate-200 bg-white" };
-    if (dayStatus === 'completed') return { text: "Day Completed", color: "text-emerald-600 border-emerald-200 bg-emerald-50" };
+    if (dayStatus === 'completed') return { text: "Day Completed", color: "text-slate-500 border-slate-200 bg-slate-50" };
     if (!hasSchedule) return { text: "Status: Not Planned", color: "text-amber-500 border-amber-100 bg-amber-50" };
 
     const now = getNow();
@@ -157,6 +157,21 @@ export function useDashboard() {
   const endDay = () => setIsSummaryOpen(true);
 
   const confirmEndDay = async () => {
+    const currentActive = [...scheduleTasks, ...dailyActions].find(t => t.status === 'in_progress');
+    if (currentActive) {
+       // A. Stop in Database
+       await api.apiLogTimer(currentActive.id, 'STOP');
+       await api.apiUpdateTaskProgress(currentActive.id, currentActive.elapsedSeconds);
+       await api.apiUpdateTaskStatus(currentActive.id, 'pending');
+       
+       // B. Stop in UI (Optimistic Update)
+       // This removes 'in_progress' status, which causes 'activeTask' to become undefined,
+       // effectively killing the timer interval.
+       const stopMap = (t: TaskItem) => t.status === 'in_progress' ? { ...t, status: 'pending' as const } : t;
+       setScheduleTasks(prev => prev.map(stopMap));
+       setDailyActions(prev => prev.map(stopMap));
+    }
+    
     setDayStatus('completed');
     setIsSummaryOpen(false);
     await api.apiEndDay();
