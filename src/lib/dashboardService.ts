@@ -47,7 +47,6 @@ export const getUserId = async () => {
 export const fetchDayData = async (dateId: string) => {
   const userId = await getUserId();
   if (!userId) return null;
-
   const dateOnly = dateId.split('_')[0];
 
   // 1. Get Day Status
@@ -56,12 +55,12 @@ export const fetchDayData = async (dateId: string) => {
     .select('*')
     .eq('id', dateId)
     .eq('user_id', userId)
-    .maybeSingle(); // <--- CHANGED FROM .single()
+    .maybeSingle();
 
   if (error) console.error("Error fetching day:", error);
-  if (!day) return null; // Cleanly returns null, no 406 error
+  if (!day) return null;
 
-  // 2. Get Tasks
+  // 2. Get Tasks (Same as before)
   const { data: tasks } = await supabase
     .from('tasks')
     .select('*')
@@ -69,20 +68,20 @@ export const fetchDayData = async (dateId: string) => {
     .eq('user_id', userId)
     .order('created_at', { ascending: true });
 
-  // 3. Get Timer Logs (for Report)
+  // 3. Get Timer Logs (Same as before)
   const { data: logs } = await supabase
     .from('timer_logs')
     .select('*')
     .gte('recorded_at', `${dateOnly}T00:00:00`)
-    .lte('recorded_at', `${dateOnly}T23:59:59`)
+    .lte('recorded_at', `${dateOnly}T23:59:59`) // Note: This might need shifting logic later for 5AM, but okay for now
     .eq('user_id', userId);
 
-  // Transform for App
   const appTasks = (tasks || []).map(mapTaskFromDB);
 
   return {
     status: day.status,
     checkInTime: day.check_in_time ? new Date(day.check_in_time) : null,
+    completedAt: day.completed_at ? new Date(day.completed_at) : null, // <--- NEW FIELD
     scheduleTasks: appTasks.filter(t => !t.isDaily),
     dailyActions: appTasks.filter(t => t.isDaily),
     timerEvents: (logs || []).map(l => ({
@@ -94,10 +93,11 @@ export const fetchDayData = async (dateId: string) => {
   };
 };
 
-export const apiStartDay = async () => {
+// UPDATE THIS FUNCTION TO ACCEPT OPTIONAL ID
+export const apiStartDay = async (specificDateId?: string) => {
   const userId = await getUserId();
-  // Generate the new unique ID
-  const dateId = getTodayId(userId); 
+  // If ID provided, use it. Otherwise generate for Today.
+  const dateId = specificDateId || getTodayId(userId); 
 
   await supabase.from('days').insert({
     id: dateId,

@@ -285,13 +285,11 @@ export default function Dashboard() {
                         {/* 2. Idle Time (Calculated) */}
                         <div className="bg-white px-4 py-3 rounded-2xl border border-slate-100 shadow-sm text-center min-w-[90px]">
                             {(() => {
-                                // Calculate Idle on the fly for the receipt
                                 const startTime = state.checkInTime ? new Date(state.checkInTime) : new Date();
-                                // Note: In a real app, 'completedAt' should be saved in DB. 
-                                // For MVP display, we approximate using 'now' or logic.
-                                // If day is completed, we should ideally rely on a stored 'finishedTime'.
-                                // For now, let's assume 'helpers.getNow()' is the finish time if freshly completed.
-                                const finishTime = helpers.getNow(); 
+                                
+                                // FIX: Use stored completion time if available, otherwise Now
+                                const finishTime = state.completedAt ? new Date(state.completedAt) : helpers.getNow();
+                                
                                 const totalSession = Math.max(0, Math.floor((finishTime.getTime() - startTime.getTime()) / 1000));
                                 const idle = Math.max(0, totalSession - totalElapsed);
                                 

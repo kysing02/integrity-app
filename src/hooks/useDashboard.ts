@@ -33,7 +33,8 @@ export function useDashboard() {
     if (d.getHours() < 5) d.setDate(d.getDate() - 1);
     return d;
   });
-  
+  const [completedAt, setCompletedAt] = useState<Date | null>(null);
+
   // UI State
   const [modalConfig, setModalConfig] = useState<ModalConfig>({ isOpen: false, mode: 'add', type: 'schedule' });
   const [isEditing, setIsEditing] = useState(false);
@@ -64,32 +65,31 @@ export function useDashboard() {
   useEffect(() => {
     const loadFromDB = async () => {
       const userId = await api.getUserId();
-      // PASS VIEWDATE HERE
-      const dateId = getTodayId(userId, viewDate); 
+      // Calculate ID based on the View Date
+      const dateId = getTodayId(userId, viewDate);
       
-      // Clear state before loading to prevent UI flicker
+      // Clear previous state to prevent ghosting
       setScheduleTasks([]);
       setDailyActions([]);
-      
+      setTimerEvents([]);
+      setCheckInTime(null);
+      setCompletedAt(null); // Clear this too
+
       const data = await api.fetchDayData(dateId);
 
       if (data) {
-        console.log("Loaded day:", dateId);
         setDayStatus(data.status as any);
         setCheckInTime(data.checkInTime);
+        setCompletedAt(data.completedAt); // <--- LOAD IT
         setScheduleTasks(data.scheduleTasks);
         setDailyActions(data.dailyActions);
         setTimerEvents(data.timerEvents as any);
       } else {
-        console.log("No data for:", dateId);
-        // If viewing past/future empty day, default to sleeping
         setDayStatus('sleeping');
-        setCheckInTime(null);
-        setTimerEvents([]);
       }
     };
     loadFromDB();
-  }, [viewDate]);
+  }, [viewDate]); // Re-run when viewDate changes
 
   // --- DERIVED STATE ---
   const activeTask = [...scheduleTasks, ...dailyActions].find(t => t.status === 'in_progress');
@@ -180,8 +180,13 @@ export function useDashboard() {
     // Optimistic
     setDayStatus('active');
     setCheckInTime(getNow());
-    // DB
-    await api.apiStartDay();
+    
+    // DB: Generate ID for the CURRENT VIEW DATE
+    // This allows backfilling previous days if needed
+    const userId = await api.getUserId();
+    const dateId = getTodayId(userId, viewDate);
+    
+    await api.apiStartDay(dateId);
   };
 
   const endDay = () => setIsSummaryOpen(true);
@@ -418,7 +423,7 @@ export function useDashboard() {
     state: {
       viewDate, dayStatus, checkInTime, hasSchedule: scheduleTasks.length > 0, // Computed
       isEditing, isEditingActions, scheduleTasks, dailyActions, flexCapacitySeconds, workLeftSeconds, activeTask, totalVolumeSeconds,
-      pillState, debugTime: DEBUG_TIME, modalConfig, isSummaryOpen, timerEvents
+      pillState, debugTime: DEBUG_TIME, modalConfig, isSummaryOpen, timerEvents, completedAt,
     },
     actions: {
       navigateDay, startDay, endDay, confirmEndDay, setIsEditing, setIsEditingActions,
