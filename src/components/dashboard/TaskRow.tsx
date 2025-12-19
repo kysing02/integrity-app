@@ -161,18 +161,32 @@ const TaskRow = ({
            )}
         </div>
       )}
+
+      {/* LEFT COLUMN - FIX: Wrapped in Button again */}
+      <button 
+        onClick={(e) => { 
+          e.stopPropagation(); 
+          if (!isEditing && !readOnly && !isMarker && onToggleComplete) {
+             onToggleComplete(); 
+          }
+        }}
+        disabled={isEditing || readOnly || isMarker}
+        className={`flex flex-col items-center pt-2 z-10 outline-none ${readOnly ? 'cursor-default' : 'cursor-pointer hover:scale-105 active:scale-95 transition-transform'}`}
+      >
+        <div className={`flex flex-col items-center pt-2 z-10 ${readOnly ? 'cursor-default' : ''}`}>
+          <div className="relative">
+            <ProgressCircle size={48} progress={finalProgress} color={readOnly && !isCompleted && finalProgress === 0 ? 'text-slate-200' : ringColor}>
+                {isCompleted && !isMarker ? (
+                  <Check size={20} className={checkColor} strokeWidth={3} />
+                ) : (
+                  Icon ? <Icon size={20} className={iconColor} /> : <div className="w-5 h-5" />
+                )}
+            </ProgressCircle>
+          </div>
+        </div>
+
+      </button>
       
-      <div className={`flex flex-col items-center pt-2 z-10 ${readOnly ? 'cursor-default' : ''}`}>
-         <div className="relative">
-           <ProgressCircle size={48} progress={finalProgress} color={readOnly && !isCompleted && finalProgress === 0 ? 'text-slate-200' : ringColor}>
-              {isCompleted && !isMarker ? (
-                 <Check size={20} className={checkColor} strokeWidth={3} />
-              ) : (
-                 Icon ? <Icon size={20} className={iconColor} /> : <div className="w-5 h-5" />
-              )}
-           </ProgressCircle>
-         </div>
-      </div>
 
       <div className={`flex-grow mb-6 ${!isMarker && !readOnly && 'group'} cursor-default`} onClick={isEditable ? onEditClick : undefined}>
         <div className={cardClass}>
