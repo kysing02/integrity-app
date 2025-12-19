@@ -23,6 +23,7 @@ interface TaskRowProps {
   // Read Only Props
   readOnly?: boolean;
   actualSeconds?: number;
+  hideBadge?: boolean; // New prop for smart grouping
 
   onDelete?: () => void;
   onInsert?: () => void;
@@ -34,7 +35,7 @@ const TaskRow = ({
   title, timeRange, progress, status, category = 'CONSISTENCY', isLast, icon: Icon,
   variant = 'task',
   isEditing, isLocked, isCurrentTimeSlot, isInsertionPointPast, isGapless,
-  readOnly, actualSeconds = 0,
+  readOnly, actualSeconds = 0, hideBadge = false,
   onDelete, onInsert, onEditClick, onToggleComplete
 }: TaskRowProps) => {
   
@@ -53,7 +54,6 @@ const TaskRow = ({
   };
 
   // --- COLOR LOGIC ---
-  // FIX 2: Default Colors are now Category-based, even in ReadOnly
   let ringColor = isEfficiency ? 'text-emerald-500' : 'text-indigo-500';
   let iconColor = isEfficiency ? 'text-emerald-600' : 'text-indigo-600';
   let dotColor = isEfficiency ? 'bg-emerald-400' : 'bg-indigo-400';
@@ -74,62 +74,76 @@ const TaskRow = ({
     dotColor = 'bg-slate-200';
   }
 
-  // --- READ ONLY LOGIC ---
+// --- READ ONLY / BADGE LOGIC ---
   let resultBadge = null;
   let finalProgress = isEfficiency ? 100 : progress;
 
   if (readOnly && !isMarker) {
     const plannedSecs = parseDurationToSeconds(timeRange);
     
-    // Progress Ring Logic
-    if (plannedSecs > 0) {
-      finalProgress = Math.min((actualSeconds / plannedSecs) * 100, 100);
-    } else if (actualSeconds > 0) {
-      finalProgress = 100; 
+    // 1. RING LOGIC
+    if (isEfficiency) {
+       // Efficiency: Always 100% if done/started (Completion matters more than ratio)
+       finalProgress = (actualSeconds > 0 || isCompleted) ? 100 : 0;
     } else {
-      finalProgress = 0;
+       // Consistency: Show actual % of target (Ratio matters)
+       if (plannedSecs > 0) finalProgress = Math.min((actualSeconds / plannedSecs) * 100, 100);
+       else finalProgress = actualSeconds > 0 ? 100 : 0;
     }
 
-    // --- FIX 3: BADGE COLORS ---
-    
-    // 1. Success: Met the plan
-    if (plannedSecs > 0 && actualSeconds >= plannedSecs) {
-      resultBadge = (
-        <div className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-emerald-50 border border-emerald-100">
-           <span className="text-xs font-bold text-emerald-700">
-             {formatShortDur(actualSeconds)} <span className="text-emerald-400">/</span> <span className="opacity-60">{formatShortDur(plannedSecs)}</span>
-           </span>
-        </div>
-      );
-    } 
-    // 2. Under-performed: Did some work, but less than plan -> RED BG
-    else if (plannedSecs > 0 && actualSeconds > 0 && actualSeconds < plannedSecs) {
-      resultBadge = (
-        <div className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-rose-50 border border-rose-100">
-           <span className="text-xs font-bold text-rose-500">
-             {formatShortDur(actualSeconds)} <span className="text-rose-300">/</span> <span className="opacity-60">{formatShortDur(plannedSecs)}</span>
-           </span>
-        </div>
-      );
-    }
-    // 3. Missed: Planned but 0 actual -> RED BG
-    else if (plannedSecs > 0 && actualSeconds === 0) {
-       resultBadge = (
-        <div className="px-3 py-1.5 rounded-lg bg-rose-50 border border-rose-100">
-           <span className="text-xs font-bold text-rose-500">Missed</span>
-        </div>
-      );
-    } 
-    // 4. Unplanned: No plan, but did work -> INDIGO
-    else if (actualSeconds > 0) {
-       resultBadge = (
-        <div className="px-3 py-1.5 rounded-lg bg-indigo-50 border border-indigo-100">
-           <span className="text-xs font-bold text-indigo-600">{formatShortDur(actualSeconds)}</span>
-        </div>
-      );
-    } 
-    else {
-        resultBadge = <span className="text-slate-300 font-bold text-xs">--</span>;
+    // 2. BADGE LOGIC
+    if (!hideBadge) {
+        // A. MISSED (0m) - Same for both
+        if (plannedSecs > 0 && actualSeconds === 0 && !isCompleted) {
+            resultBadge = (
+                <div className="px-3 py-1.5 rounded-lg bg-rose-50 border border-rose-100">
+                  <span className="text-xs font-bold text-rose-500">Missed</span>
+                </div>
+            );
+        }
+        // B. EFFICIENCY (Simple View: Time Only)
+        // Rule: Red if NOT marked complete (regardless of time). Green if complete.
+        else if (isEfficiency) {
+            if (isCompleted) {
+                // Completed -> Green
+                resultBadge = (
+                    <div className="px-3 py-1.5 rounded-lg bg-emerald-50 border border-emerald-100">
+                       <span className="text-xs font-bold text-emerald-600">{formatShortDur(actualSeconds)}</span>
+                    </div>
+                );
+            } else {
+                // Not Completed -> Red (even if you spent time on it)
+                resultBadge = (
+                    <div className="px-3 py-1.5 rounded-lg bg-rose-50 border border-rose-100">
+                       <span className="text-xs font-bold text-rose-500">{formatShortDur(actualSeconds)}</span>
+                    </div>
+                );
+            }
+        }
+        // C. CONSISTENCY (Strict View: Actual/Plan)
+        // Rule: Red if Actual < Plan. Green if Met Target OR marked complete.
+        else {
+            // Success (Met Target or Completed)
+            if (isCompleted || (plannedSecs > 0 && actualSeconds >= plannedSecs)) {
+                 resultBadge = (
+                    <div className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-emerald-50 border border-emerald-100">
+                      <span className="text-xs font-bold text-emerald-700">
+                          {formatShortDur(actualSeconds)} <span className="text-emerald-400">/</span> <span className="opacity-60">{formatShortDur(plannedSecs)}</span>
+                      </span>
+                    </div>
+                );
+            } 
+            // Failed Target (and not marked done) -> Red
+            else {
+                 resultBadge = (
+                    <div className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-rose-50 border border-rose-100">
+                      <span className="text-xs font-bold text-rose-500">
+                          {formatShortDur(actualSeconds)} <span className="text-rose-300">/</span> <span className="opacity-60">{formatShortDur(plannedSecs)}</span>
+                      </span>
+                    </div>
+                );
+            }
+        }
     }
   }
 
@@ -161,8 +175,8 @@ const TaskRow = ({
            )}
         </div>
       )}
-
-      {/* LEFT COLUMN - FIX: Wrapped in Button again */}
+      
+      {/* LEFT COLUMN: THE CLICKABLE BUTTON */}
       <button 
         onClick={(e) => { 
           e.stopPropagation(); 
@@ -173,21 +187,18 @@ const TaskRow = ({
         disabled={isEditing || readOnly || isMarker}
         className={`flex flex-col items-center pt-2 z-10 outline-none ${readOnly ? 'cursor-default' : 'cursor-pointer hover:scale-105 active:scale-95 transition-transform'}`}
       >
-        <div className={`flex flex-col items-center pt-2 z-10 ${readOnly ? 'cursor-default' : ''}`}>
-          <div className="relative">
-            <ProgressCircle size={48} progress={finalProgress} color={readOnly && !isCompleted && finalProgress === 0 ? 'text-slate-200' : ringColor}>
-                {isCompleted && !isMarker ? (
-                  <Check size={20} className={checkColor} strokeWidth={3} />
-                ) : (
-                  Icon ? <Icon size={20} className={iconColor} /> : <div className="w-5 h-5" />
-                )}
-            </ProgressCircle>
-          </div>
-        </div>
-
+         <div className="relative">
+           <ProgressCircle size={48} progress={finalProgress} color={readOnly && !isCompleted && finalProgress === 0 ? 'text-slate-200' : ringColor}>
+              {isCompleted && !isMarker ? (
+                 <Check size={20} className={checkColor} strokeWidth={3} />
+              ) : (
+                 Icon ? <Icon size={20} className={iconColor} /> : <div className="w-5 h-5" />
+              )}
+           </ProgressCircle>
+         </div>
       </button>
-      
 
+      {/* RIGHT COLUMN */}
       <div className={`flex-grow mb-6 ${!isMarker && !readOnly && 'group'} cursor-default`} onClick={isEditable ? onEditClick : undefined}>
         <div className={cardClass}>
           <div className="flex justify-between items-center">

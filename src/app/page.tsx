@@ -268,14 +268,41 @@ export default function Dashboard() {
                       <h2 className="text-2xl font-bold text-slate-800">Day Completed</h2>
                       <p className="text-slate-400 font-medium text-sm mt-1">{new Date().toLocaleDateString(undefined, { weekday: 'long', month: 'long', day: 'numeric' })}</p>
                       
-                      <div className="flex gap-4 mt-6">
-                        <div className="bg-white px-5 py-3 rounded-2xl border border-slate-100 shadow-sm text-center min-w-[100px]">
-                            <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Focus</p>
-                            <p className="text-xl font-bold text-slate-700 mt-1">{formatDur(totalElapsed)}</p>
+                      {/* STATS ROW */}
+                      <div className="flex gap-3 mt-6 w-full justify-center">
+                        
+                        {/* 1. Focus Time */}
+                        <div className="bg-white px-4 py-3 rounded-2xl border border-slate-100 shadow-sm text-center min-w-[90px]">
+                            <p className="text-[10px] font-bold text-indigo-400 uppercase tracking-wider">Focus</p>
+                            <p className="text-lg font-bold text-slate-700 mt-1">{formatDur(totalElapsed)}</p>
                         </div>
-                        <div className="bg-white px-5 py-3 rounded-2xl border border-slate-100 shadow-sm text-center min-w-[100px]">
-                            <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Done</p>
-                            <p className="text-xl font-bold text-slate-700 mt-1">{completedCount}/{totalCount}</p>
+
+                        {/* 2. Idle Time (Calculated) */}
+                        <div className="bg-white px-4 py-3 rounded-2xl border border-slate-100 shadow-sm text-center min-w-[90px]">
+                            {(() => {
+                                // Calculate Idle on the fly for the receipt
+                                const startTime = state.checkInTime ? new Date(state.checkInTime) : new Date();
+                                // Note: In a real app, 'completedAt' should be saved in DB. 
+                                // For MVP display, we approximate using 'now' or logic.
+                                // If day is completed, we should ideally rely on a stored 'finishedTime'.
+                                // For now, let's assume 'helpers.getNow()' is the finish time if freshly completed.
+                                const finishTime = helpers.getNow(); 
+                                const totalSession = Math.max(0, Math.floor((finishTime.getTime() - startTime.getTime()) / 1000));
+                                const idle = Math.max(0, totalSession - totalElapsed);
+                                
+                                return (
+                                  <>
+                                    <p className="text-[10px] font-bold text-amber-400 uppercase tracking-wider">Idle</p>
+                                    <p className="text-lg font-bold text-slate-700 mt-1">{formatDur(idle)}</p>
+                                  </>
+                                )
+                            })()}
+                        </div>
+
+                        {/* 3. Task Count */}
+                        <div className="bg-white px-4 py-3 rounded-2xl border border-slate-100 shadow-sm text-center min-w-[90px]">
+                            <p className="text-[10px] font-bold text-emerald-400 uppercase tracking-wider">Done</p>
+                            <p className="text-lg font-bold text-slate-700 mt-1">{completedCount}/{totalCount}</p>
                         </div>
                       </div>
                     </div>
@@ -287,34 +314,49 @@ export default function Dashboard() {
                         <div className="mb-8">
                           <h3 className="text-xs font-bold text-slate-400 uppercase tracking-widest mb-4 pl-2">Schedule Results</h3>
                           <div className="space-y-0 relative border-l border-slate-200 ml-4 pl-6 py-2">
-                            {state.scheduleTasks.map((task, index) => (
-                              <div key={task.id} className="mb-4">
-                                <TaskRow 
-                                  id={task.id} title={task.title} timeRange={task.timeRange} status={task.status} category={task.category} icon={task.icon} 
-                                  progress={100} isLast={index === state.scheduleTasks.length - 1}
-                                  readOnly={true} actualSeconds={task.elapsedSeconds}
-                                />
-                              </div>
-                            ))}
+                            {state.scheduleTasks.map((task, index) => {
+                              // LOOK AHEAD LOGIC
+                              // Check if any task AFTER this one has the same title
+                              const hasFutureInstance = state.scheduleTasks.slice(index + 1).some(t => t.title === task.title);
+                              
+                              return (
+                                <div key={task.id} className="mb-4">
+                                  <TaskRow 
+                                    id={task.id} title={task.title} timeRange={task.timeRange} status={task.status} category={task.category} icon={task.icon} 
+                                    progress={100} isLast={index === state.scheduleTasks.length - 1}
+                                    readOnly={true} actualSeconds={task.elapsedSeconds}
+                                    
+                                    // HIDE BADGE if this is NOT the last instance of this task
+                                    hideBadge={hasFutureInstance} 
+                                  />
+                                </div>
+                              );
+                            })}
                           </div>
                         </div>
                       )}
 
                       {state.dailyActions.length > 0 && (
-                         <div className="mb-8">
-                           <h3 className="text-xs font-bold text-slate-400 uppercase tracking-widest mb-4 pl-2">Daily Actions</h3>
-                           <div className="space-y-0 relative border-l border-slate-200 ml-4 pl-6 py-2">
-                              {state.dailyActions.map((task, index) => (
-                                <div key={task.id} className="mb-4">
-                                  <TaskRow 
-                                    id={task.id} title={task.title} timeRange={task.timeRange} status={task.status} category={task.category} icon={task.icon} 
-                                    progress={100} isLast={index === state.dailyActions.length - 1}
-                                    readOnly={true} actualSeconds={task.elapsedSeconds}
-                                  />
-                                </div>
-                              ))}
-                           </div>
-                         </div>
+                        <div className="mb-8">
+                          <h3 className="text-xs font-bold text-slate-400 uppercase tracking-widest mb-4 pl-2">Daily Actions</h3>
+                          <div className="space-y-0 relative border-l border-slate-200 ml-4 pl-6 py-2">
+                              {state.dailyActions.map((task, index) => {
+                                // LOOK AHEAD LOGIC
+                                const hasFutureInstance = state.dailyActions.slice(index + 1).some(t => t.title === task.title);
+                                
+                                return (
+                                  <div key={task.id} className="mb-4">
+                                    <TaskRow 
+                                      id={task.id} title={task.title} timeRange={task.timeRange} status={task.status} category={task.category} icon={task.icon} 
+                                      progress={100} isLast={index === state.dailyActions.length - 1}
+                                      readOnly={true} actualSeconds={task.elapsedSeconds}
+                                      hideBadge={hasFutureInstance}
+                                    />
+                                  </div>
+                                );
+                              })}
+                          </div>
+                        </div>
                       )}
                     </div>
                     
