@@ -45,9 +45,16 @@ export default function Dashboard() {
   return (
     <main className="h-full w-full bg-slate-50 text-slate-900 font-sans relative overflow-hidden flex flex-col">
       <DashboardHeader 
-        hasSchedule={state.hasSchedule} isPast={false} 
-        isEditing={state.isEditing} isEditingActions={state.isEditingActions} 
+        hasSchedule={state.hasSchedule} 
+        isPast={false} // You can compute this: state.viewDate < today
+        isEditing={state.isEditing} 
+        isEditingActions={state.isEditingActions} 
         onFinishEdit={() => { actions.setIsEditing(false); actions.setIsEditingActions(false); }} 
+        
+        // NEW WIRING
+        viewDate={state.viewDate}
+        onPrevDay={() => actions.navigateDay(-1)}
+        onNextDay={() => actions.navigateDay(1)}
       />
       
       {/* --- MODALS --- */}
@@ -265,9 +272,7 @@ export default function Dashboard() {
                       <div className="w-16 h-16 bg-emerald-100 rounded-full flex items-center justify-center text-emerald-600 mb-4 shadow-sm ring-4 ring-white">
                         <CalendarCheck size={32} />
                       </div>
-                      <h2 className="text-2xl font-bold text-slate-800">Day Completed</h2>
-                      <p className="text-slate-400 font-medium text-sm mt-1">{new Date().toLocaleDateString(undefined, { weekday: 'long', month: 'long', day: 'numeric' })}</p>
-                      
+                      <h2 className="text-2xl font-bold text-slate-800">Day Completed</h2>                      
                       {/* STATS ROW */}
                       <div className="flex gap-3 mt-6 w-full justify-center">
                         

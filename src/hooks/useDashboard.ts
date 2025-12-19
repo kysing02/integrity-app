@@ -28,6 +28,11 @@ export function useDashboard() {
   const [scheduleTasks, setScheduleTasks] = useState<TaskItem[]>(INITIAL_SCHEDULE);
   const [dailyActions, setDailyActions] = useState<TaskItem[]>(INITIAL_DAILY);
   const [timerEvents, setTimerEvents] = useState<TimerEvent[]>([]);
+  const [viewDate, setViewDate] = useState(() => {
+    const d = new Date();
+    if (d.getHours() < 5) d.setDate(d.getDate() - 1);
+    return d;
+  });
   
   // UI State
   const [modalConfig, setModalConfig] = useState<ModalConfig>({ isOpen: false, mode: 'add', type: 'schedule' });
@@ -59,23 +64,32 @@ export function useDashboard() {
   useEffect(() => {
     const loadFromDB = async () => {
       const userId = await api.getUserId();
-      const todayId = getTodayId(userId);
-      const data = await api.fetchDayData(todayId);
+      // PASS VIEWDATE HERE
+      const dateId = getTodayId(userId, viewDate); 
+      
+      // Clear state before loading to prevent UI flicker
+      setScheduleTasks([]);
+      setDailyActions([]);
+      
+      const data = await api.fetchDayData(dateId);
 
       if (data) {
-        console.log("Loaded day from Supabase");
+        console.log("Loaded day:", dateId);
         setDayStatus(data.status as any);
         setCheckInTime(data.checkInTime);
         setScheduleTasks(data.scheduleTasks);
         setDailyActions(data.dailyActions);
         setTimerEvents(data.timerEvents as any);
       } else {
-        console.log("No day in Supabase, ready to start.");
+        console.log("No data for:", dateId);
+        // If viewing past/future empty day, default to sleeping
         setDayStatus('sleeping');
+        setCheckInTime(null);
+        setTimerEvents([]);
       }
     };
     loadFromDB();
-  }, []);
+  }, [viewDate]);
 
   // --- DERIVED STATE ---
   const activeTask = [...scheduleTasks, ...dailyActions].find(t => t.status === 'in_progress');
@@ -156,6 +170,11 @@ export function useDashboard() {
   }, [dayStatus, hasSchedule, scheduleTasks, dailyActions]); // Dependency array roughly correct, technically needs 'now' but that updates via timer/re-renders
 
   // --- ACTIONS ---
+  const navigateDay = (offset: number) => {
+    const newDate = new Date(viewDate);
+    newDate.setDate(newDate.getDate() + offset);
+    setViewDate(newDate);
+  };
 
   const startDay = async () => {
     // Optimistic
@@ -397,12 +416,12 @@ export function useDashboard() {
 
   return {
     state: {
-      dayStatus, checkInTime, hasSchedule: scheduleTasks.length > 0, // Computed
+      viewDate, dayStatus, checkInTime, hasSchedule: scheduleTasks.length > 0, // Computed
       isEditing, isEditingActions, scheduleTasks, dailyActions, flexCapacitySeconds, workLeftSeconds, activeTask, totalVolumeSeconds,
       pillState, debugTime: DEBUG_TIME, modalConfig, isSummaryOpen, timerEvents
     },
     actions: {
-      startDay, endDay, confirmEndDay, setIsEditing, setIsEditingActions,
+      navigateDay, startDay, endDay, confirmEndDay, setIsEditing, setIsEditingActions,
       toggleTask, toggleComplete, deleteTask, insertTask, addDailyAction, openAddSchedule, openAddDaily, openEditTask, saveTask, closeModal, setIsSummaryOpen
     },
     helpers: { isTimeInPast: isTimeInPastShifted, getNow }
