@@ -95,6 +95,26 @@ export function useDashboard() {
   const activeTask = [...scheduleTasks, ...dailyActions].find(t => t.status === 'in_progress');
   const totalVolumeSeconds = scheduleTasks.reduce((acc, t) => acc + parseDurationToSeconds(t.timeRange), 0) + dailyActions.reduce((acc, t) => acc + parseDurationToSeconds(t.timeRange), 0);
 
+  const dateState = useMemo(() => {
+    // 1. Calculate Logical "Today"
+    const logicalToday = new Date();
+    if (logicalToday.getHours() < 5) {
+       logicalToday.setDate(logicalToday.getDate() - 1);
+    }
+    // Zero out time for strict date comparison
+    logicalToday.setHours(0, 0, 0, 0);
+
+    // 2. Calculate View Date (Zeroed)
+    const view = new Date(viewDate);
+    view.setHours(0, 0, 0, 0);
+
+    return {
+      isToday: view.getTime() === logicalToday.getTime(),
+      isPast: view.getTime() < logicalToday.getTime(),
+      isFuture: view.getTime() > logicalToday.getTime(),
+    };
+  }, [viewDate]); // Recalculate when viewDate changes
+
   // --- TIMER ENGINE ---
   useEffect(() => {
     const interval = setInterval(() => {
@@ -210,6 +230,12 @@ export function useDashboard() {
     setDayStatus('completed');
     setIsSummaryOpen(false);
     await api.apiEndDay();
+  };
+
+  const goToToday = () => {
+    const d = new Date();
+    if (d.getHours() < 5) d.setDate(d.getDate() - 1);
+    setViewDate(d);
   };
 
   const toggleTask = async (id: string, isDaily: boolean) => {
@@ -424,9 +450,12 @@ export function useDashboard() {
       viewDate, dayStatus, checkInTime, hasSchedule: scheduleTasks.length > 0, // Computed
       isEditing, isEditingActions, scheduleTasks, dailyActions, flexCapacitySeconds, workLeftSeconds, activeTask, totalVolumeSeconds,
       pillState, debugTime: DEBUG_TIME, modalConfig, isSummaryOpen, timerEvents, completedAt,
+      isPast: dateState.isPast,
+      isFuture: dateState.isFuture,
+      isToday: dateState.isToday,
     },
     actions: {
-      navigateDay, startDay, endDay, confirmEndDay, setIsEditing, setIsEditingActions,
+      navigateDay, startDay, endDay, confirmEndDay, goToToday, setIsEditing, setIsEditingActions,
       toggleTask, toggleComplete, deleteTask, insertTask, addDailyAction, openAddSchedule, openAddDaily, openEditTask, saveTask, closeModal, setIsSummaryOpen
     },
     helpers: { isTimeInPast: isTimeInPastShifted, getNow }

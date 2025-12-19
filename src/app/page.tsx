@@ -2,7 +2,7 @@
 
 import { useState } from 'react';
 import { 
-  Plus, Clock, Sun, Edit3, Check, LogOut, Coffee, CalendarCheck, Layout
+  Plus, Clock, Sun, Edit3, Check, LogOut, Coffee, CalendarCheck, Layout, Calendar, Brain, History, Play
 } from 'lucide-react';
 
 // Components
@@ -107,18 +107,77 @@ export default function Dashboard() {
             <div className="px-6 mt-4">
               
               {/* =========================================================
-                  VIEW 1: SLEEPING (START DAY)
+                  VIEW 1: SLEEPING / EMPTY DAY
                   ========================================================= */}
               {state.dayStatus === 'sleeping' && (
-                <div className="flex flex-col items-center justify-center py-20 animate-in fade-in slide-in-from-bottom-4 duration-700">
-                   <div className="w-20 h-20 bg-white rounded-full shadow-xl shadow-indigo-100 flex items-center justify-center mb-6">
-                      <Coffee size={32} className="text-indigo-500" />
-                   </div>
-                   <h2 className="text-xl font-bold text-slate-800 mb-2">Good Morning</h2>
-                   <p className="text-sm text-slate-400 mb-8 max-w-[200px] text-center">Your timeline is waiting. Ready to start?</p>
-                   <button onClick={actions.startDay} className="bg-indigo-600 text-white font-bold px-8 py-4 rounded-2xl shadow-lg shadow-indigo-200 active:scale-95 transition-all flex items-center gap-2">
-                     <Sun size={18} /><span>Start Day</span>
-                   </button>
+                <div className="flex-1 flex flex-col items-center justify-center p-6 text-center animate-in zoom-in-95 duration-500">
+                  
+                  {/* --- SCENARIO A: FUTURE (Planning) --- */}
+                  {state.isFuture && (
+                    <>
+                       <div className="w-20 h-20 bg-indigo-50 rounded-full flex items-center justify-center mb-6 text-indigo-300 shadow-inner">
+                        <Calendar size={32} />
+                      </div>
+                      <h2 className="text-3xl font-bold text-slate-800 mb-2">Plan Ahead</h2>
+                      <p className="text-slate-400 max-w-xs mx-auto leading-relaxed mb-8">
+                        Prepare your schedule for {state.viewDate.toLocaleDateString('en-GB', { weekday: 'long' })}.
+                      </p>
+                      <button 
+                        onClick={actions.startDay} // Creates the DB entry early
+                        className="bg-indigo-600 text-white font-bold text-lg px-8 py-4 rounded-2xl shadow-xl shadow-indigo-200 hover:scale-105 active:scale-95 transition-all flex items-center gap-3"
+                      >
+                         <Brain size={20} />
+                         <span>Start Planning</span>
+                      </button>
+                    </>
+                  )}
+
+                  {/* --- SCENARIO B: PAST (No Data) --- */}
+                  {state.isPast && (
+                    <>
+                       <div className="w-20 h-20 bg-slate-50 rounded-full flex items-center justify-center mb-6 text-slate-300 shadow-inner">
+                        <History size={32} />
+                      </div>
+                      <h2 className="text-3xl font-bold text-slate-400 mb-2">No Record</h2>
+                      <p className="text-slate-400 max-w-xs mx-auto leading-relaxed mb-8">
+                        You didn't track any activity on this day.
+                      </p>
+                      
+                      <div className="flex gap-4">
+                        {/* Option 1: Go to Today */}
+                        <button onClick={actions.goToToday}>Go to Today</button>
+                        
+                        {/* Option 2: Backfill (Retroactive) */}
+                        <button 
+                          onClick={actions.startDay} 
+                          className="px-6 py-3 rounded-xl font-bold text-indigo-600 bg-indigo-50 hover:bg-indigo-100 transition-all"
+                        >
+                           Create Retroactive Log
+                        </button>
+                      </div>
+                    </>
+                  )}
+
+                  {/* --- SCENARIO C: TODAY (Good Morning) --- */}
+                  {state.isToday && (
+                    <>
+                      <div className="w-24 h-24 bg-indigo-100 rounded-full flex items-center justify-center mb-6 text-indigo-600 shadow-lg shadow-indigo-100 ring-4 ring-white">
+                        <Brain size={40} />
+                      </div>
+                      <h2 className="text-3xl font-bold text-slate-800 mb-2">Good Morning</h2>
+                      <p className="text-slate-400 max-w-xs mx-auto leading-relaxed mb-8">
+                        Ready to design your day? Start by defining your key objectives.
+                      </p>
+                      <button 
+                        onClick={actions.startDay} 
+                        className="bg-slate-900 text-white font-bold text-lg px-8 py-4 rounded-2xl shadow-xl shadow-slate-300 hover:scale-105 active:scale-95 transition-all flex items-center gap-3"
+                      >
+                         <Play size={20} fill="currentColor" />
+                         <span>Start Day</span>
+                      </button>
+                    </>
+                  )}
+                  
                 </div>
               )}
 
