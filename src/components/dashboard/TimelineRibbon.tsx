@@ -2,13 +2,14 @@
 
 import React, { useState, useEffect } from 'react';
 import { TaskItem } from '@/types/dashboard';
+import { getAdjustedMinutes } from '@/lib/timeUtils'; // Import new helper
 
 interface TimelineRibbonProps {
   showCurrentTime?: boolean;
   tasks?: TaskItem[];
-  plannedCheckIn?: string; // e.g. "07:00"
-  plannedSleep?: string;   // e.g. "23:00"
-  debugTime?: string;      // e.g. "08:00" for testing
+  plannedCheckIn?: string; 
+  plannedSleep?: string; 
+  debugTime?: string;
 }
 
 const TimelineRibbon = ({ 
@@ -20,10 +21,17 @@ const TimelineRibbon = ({
 }: TimelineRibbonProps) => {
   const [percentagePos, setPercentagePos] = useState(0);
 
-  // --- HELPER: Parse "HH:MM" to minutes from midnight ---
-  const timeToMinutes = (timeStr: string): number => {
-    const [h, m] = timeStr.split(':').map(Number);
-    return (h * 60) + m;
+  // Constants for the 5AM - 5AM day
+  const DAY_START_OFFSET = 300; // 5 hours * 60 mins
+  const TOTAL_DAY_MINUTES = 1440; // 24 hours
+
+  // --- HELPER: Map Adjusted Minutes to Percentage (0-100) ---
+  const mapMinutesToPercent = (adjustedMinutes: number) => {
+    // 1. Shift by the Day Start (subtract 300 mins)
+    let relativeMinutes = adjustedMinutes - DAY_START_OFFSET;
+    
+    // 2. Calculate %
+    return (relativeMinutes / TOTAL_DAY_MINUTES) * 100;
   };
 
   useEffect(() => {
@@ -39,8 +47,15 @@ const TimelineRibbon = ({
         now.setHours(h, m, 0, 0);
       }
 
-      const minutesSinceMidnight = now.getHours() * 60 + now.getMinutes();
-      setPercentagePos((minutesSinceMidnight / 1440) * 100);
+      const h = now.getHours();
+      const m = now.getMinutes();
+      
+      // Calculate current shifted time
+      const adjustedHour = h < 5 ? h + 24 : h;
+      const currentAdjustedMins = (adjustedHour * 60) + m;
+
+      const pct = mapMinutesToPercent(currentAdjustedMins);
+      setPercentagePos(Math.max(0, Math.min(100, pct)));
     };
     
     updatePosition();
@@ -55,31 +70,39 @@ const TimelineRibbon = ({
         {/* DYNAMIC BACKGROUND BLOCKS */}
         <div className="absolute inset-0">
            
-           {/* 1. MORNING BLOCK (00:00 -> Planned Check-in) */}
+           {/* 1. MORNING BLOCK (05:00 -> Planned Check-in) */}
            {(() => {
-              const endMins = timeToMinutes(plannedCheckIn);
-              const width = (endMins / 1440) * 100;
-              return (
-                <div 
-                  className="absolute h-full bg-slate-400/20 border-r border-white/10"
-                  style={{ left: '0%', width: `${width}%` }}
-                  title="Morning Routine"
-                />
-              );
+             const endMins = getAdjustedMinutes(plannedCheckIn); // e.g. 07:00 -> 420
+             const startMins = 300; // 05:00
+             
+             const diff = endMins - startMins;
+             const width = (diff / TOTAL_DAY_MINUTES) * 100;
+             
+             return (
+               <div 
+                 className="absolute h-full bg-slate-400/20 border-r border-white/10"
+                 style={{ left: '0%', width: `${Math.max(0, width)}%` }}
+                 title="Morning Routine"
+               />
+             );
            })()}
 
-           {/* 2. NIGHT BLOCK (Planned Sleep -> 00:00) */}
+           {/* 2. NIGHT BLOCK (Planned Sleep -> 05:00 Next Day) */}
            {(() => {
-              const startMins = timeToMinutes(plannedSleep);
-              const width = ((1440 - startMins) / 1440) * 100;
-              const left = (startMins / 1440) * 100;
-              return (
-                <div 
-                  className="absolute h-full bg-slate-400/20 border-l border-white/10"
-                  style={{ left: `${left}%`, width: `${width}%` }}
-                  title="Night Routine"
-                />
-              );
+             const startMins = getAdjustedMinutes(plannedSleep); // e.g. 23:00 -> 1380
+             const endMins = 1740; // 29:00 (05:00 next day)
+             
+             const diff = endMins - startMins;
+             const width = (diff / TOTAL_DAY_MINUTES) * 100;
+             const left = mapMinutesToPercent(startMins);
+
+             return (
+               <div 
+                 className="absolute h-full bg-slate-400/20 border-l border-white/10"
+                 style={{ left: `${left}%`, width: `${width}%` }}
+                 title="Night Routine"
+               />
+             );
            })()}
 
            {/* 3. SCHEDULED TASKS */}
@@ -88,13 +111,14 @@ const TimelineRibbon = ({
              if (!task.timeRange.includes(' - ')) return null;
 
              const [startStr, endStr] = task.timeRange.split(' - ');
-             const startMins = timeToMinutes(startStr);
-             const endMins = timeToMinutes(endStr);
-
-             const left = (startMins / 1440) * 100;
-             const width = ((endMins - startMins) / 1440) * 100;
              
-             // Efficiency = Emerald, Consistency = Indigo
+             // Use new helper
+             const startMins = getAdjustedMinutes(startStr);
+             const endMins = getAdjustedMinutes(endStr);
+
+             const left = mapMinutesToPercent(startMins);
+             const width = ((endMins - startMins) / TOTAL_DAY_MINUTES) * 100;
+             
              const colorClass = task.category === 'EFFICIENCY' ? 'bg-emerald-400/20' : 'bg-indigo-400/20';
 
              return (
@@ -118,12 +142,13 @@ const TimelineRibbon = ({
         )}
       </div>
 
+      {/* Axis Labels (Shifted) */}
       <div className="flex justify-between text-[10px] font-medium text-slate-400 uppercase tracking-widest px-1">
-        <span>00:00</span>
-        <span>06:00</span>
-        <span>12:00</span>
-        <span>18:00</span>
-        <span>00:00</span>
+        <span>05:00</span>
+        <span>11:00</span>
+        <span>17:00</span>
+        <span>23:00</span>
+        <span>05:00</span>
       </div>
     </div>
   );

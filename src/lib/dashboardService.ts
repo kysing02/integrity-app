@@ -151,6 +151,25 @@ export const apiCreateTask = async (task: TaskItem) => {
   if (error) console.error("Supabase Create Error:", error);
 };
 
+export const apiUpdateTask = async (taskId: string, updates: Partial<TaskItem>) => {
+  const userId = await getUserId();
+  if (!userId) return;
+
+  const dbUpdates: any = {};
+  if (updates.title) dbUpdates.title = updates.title;
+  if (updates.timeRange) dbUpdates.time_range = updates.timeRange;
+  if (updates.category) dbUpdates.category = updates.category;
+  
+  // Map icon string if present
+  if (updates.icon && typeof updates.icon === 'string') {
+    dbUpdates.icon = updates.icon;
+  }
+  // If updates.icon is a function (React component), we ignore it for DB 
+  // because we can't save functions. The creation logic handles the mapping.
+
+  await supabase.from('tasks').update(dbUpdates).eq('id', taskId).eq('user_id', userId);
+};
+
 export const apiUpdateTaskStatus = async (taskId: string, status: string) => {
   const userId = await getUserId();
   if (!userId) return;

@@ -6,6 +6,7 @@ import { TimerEvent, TaskItem } from '@/types/dashboard';
 import { parseDurationToSeconds, getTaskRemainingSeconds, getTodayDateAtTime } from '@/lib/timeUtils';
 import { getTodayId } from '@/lib/supabase'; // Helper from Phase 2
 import * as api from '@/lib/dashboardService'; // The service we just wrote
+import { getAdjustedMinutes, isTimeInPastShifted } from '@/lib/timeUtils';
 
 // --- CONFIG ---
 const DEBUG_TIME = null; 
@@ -34,6 +35,7 @@ export function useDashboard() {
   const [isEditingActions, setIsEditingActions] = useState(false);
   const [isSummaryOpen, setIsSummaryOpen] = useState(false);
   const [flexCapacitySeconds, setFlexCapacitySeconds] = useState(0);
+  const [workLeftSeconds, setWorkLeftSeconds] = useState(0);
 
   // --- HELPERS ---
   const getNow = () => {
@@ -84,24 +86,33 @@ export function useDashboard() {
     const interval = setInterval(() => {
       const now = getNow();
       
-      // 1. Tick
+      // 1. Tick Active Task
       if (activeTask) {
         const updater = (list: TaskItem[]) => list.map(t => t.id === activeTask.id ? { ...t, elapsedSeconds: t.elapsedSeconds + 1 } : t);
         if (activeTask.isDaily) setDailyActions(prev => updater(prev));
         else setScheduleTasks(prev => updater(prev));
-        
-        // Note: We do NOT sync to DB here to save performance
       }
 
-      // 2. Flex Cap Calc
+      // 2. Flex Cap Calc (STRICT DEADLINE LOGIC)
       if (dayStatus === 'active') {
-         // ... (existing logic) ...
-         const midnight = new Date(); midnight.setHours(24, 0, 0, 0);
-         const secondsSinceMidnight = now.getHours() * 3600 + now.getMinutes() * 60 + now.getSeconds();
-         const timeLeft = (24 * 3600) - secondsSinceMidnight;
-         const remainingSchedule = scheduleTasks.reduce((acc, t) => acc + getTaskRemainingSeconds(t, now), 0);
-         const remainingDaily = dailyActions.reduce((acc, t) => acc + getTaskRemainingSeconds(t, now), 0);
-         setFlexCapacitySeconds(Math.max(0, timeLeft - remainingSchedule - remainingDaily));
+          const currentStr = now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: false });
+          const currentMins = getAdjustedMinutes(currentStr);
+          const targetEndMins = getAdjustedMinutes("23:00"); // Strict Goal
+          
+          const totalWindowSeconds = (targetEndMins - currentMins) * 60;
+             
+          const calcRemaining = (t: TaskItem) => {
+             const total = parseDurationToSeconds(t.timeRange);
+             if (t.status === 'completed') return 0; // <--- The logic you wanted
+             return Math.max(0, total - t.elapsedSeconds);
+          };
+
+          const totalWorkLeft = 
+            scheduleTasks.reduce((acc, t) => acc + calcRemaining(t), 0) + 
+            dailyActions.reduce((acc, t) => acc + calcRemaining(t), 0);
+          
+          setWorkLeftSeconds(totalWorkLeft); // <--- Store it
+          setFlexCapacitySeconds(totalWindowSeconds - totalWorkLeft);
       }
     }, 1000);
     return () => clearInterval(interval);
@@ -244,41 +255,94 @@ export function useDashboard() {
     }
   };
 
-  const saveTask = async (data: Partial<TaskItem>) => {
-    if (modalConfig.mode === 'add') {
+  const saveTask = async (taskData: Partial<TaskItem>) => {
+    if (!taskData.title) return;
+
+    const isNew = !modalConfig.initialData?.id;
+    const isDaily = modalConfig.type === 'daily';
+    
+    // 1. Prepare the Task Object
+    const baseTask = {
+      title: taskData.title,
+      icon: taskData.icon, // Store the component function directly
+      category: taskData.category || 'CONSISTENCY',
+      timeRange: taskData.timeRange || "",
+      isDaily: isDaily,
+      status: (modalConfig.initialData?.status || 'pending') as any, // Preserve status
+      elapsedSeconds: modalConfig.initialData?.elapsedSeconds || 0,   // Preserve time
+    };
+
+    if (isNew) {
+      // --- CREATE ---
       const newTask: TaskItem = {
-        id: crypto.randomUUID(), // Generate real UUID for DB
-        title: data.title || "New Task",
-        timeRange: data.timeRange || "--:--",
-        score: 0,
-        status: 'pending',
-        category: data.category || 'CONSISTENCY',
-        icon: data.icon || Brain,
-        elapsedSeconds: 0,
-        isDaily: modalConfig.type === 'daily'
+        ...baseTask,
+        id: crypto.randomUUID(), // Temp ID
+        user_id: 'guest', // Placeholder
+        day_id: 'temp',
+        created_at: new Date().toISOString()
       };
 
       // Optimistic Update
-      if (modalConfig.type === 'daily') {
-        setDailyActions([...dailyActions, newTask]);
+      if (isDaily) {
+        setDailyActions(prev => [...prev, newTask]);
       } else {
-        const newTasks = [...scheduleTasks];
-        const idx = modalConfig.insertIndex !== undefined ? modalConfig.insertIndex : -1;
-        if (idx === -1) newTasks.unshift(newTask);
-        else newTasks.splice(idx + 1, 0, newTask);
-        setScheduleTasks(newTasks);
+        setScheduleTasks(prev => {
+          const updated = [...prev, newTask];
+          // Sort using the new Adjusted Helper
+          return updated.sort((a, b) => {
+            const timeA = a.timeRange.split(' - ')[0] || "00:00";
+            const timeB = b.timeRange.split(' - ')[0] || "00:00";
+            return getAdjustedMinutes(timeA) - getAdjustedMinutes(timeB);
+          });
+        });
       }
       
-      // DB Sync
       await api.apiCreateTask(newTask);
 
     } else {
-      // EDIT MODE (Simplified for MVP: Optimistic only for now, assume no complex edits)
-      // For full sync, you'd need an apiUpdateTaskDetails function
-      const updater = (list: TaskItem[]) => list.map(t => t.id === modalConfig.initialData?.id ? { ...t, ...data } : t);
-      if (modalConfig.type === 'daily') setDailyActions(prev => updater(prev));
-      else setScheduleTasks(prev => updater(prev));
+      // --- UPDATE ---
+      const taskId = modalConfig.initialData!.id!;
+      
+      const updateFn = (prev: TaskItem[]) => {
+        // A. Map to update the specific item
+        const mapped = prev.map(t => t.id === taskId ? { ...t, ...baseTask } : t);
+        
+        // B. Sort the result (Only needed for Schedule)
+        if (!isDaily) {
+           return mapped.sort((a, b) => {
+              // Import getAdjustedMinutes logic locally or helper
+              // For safety here, we do string comparison if helpers aren't handy, 
+              // BUT better to rely on the helper we just made.
+              // Let's assume standard ASCII sort for MVP safety if helper unavailable, 
+              // OR better: use the order they are in. 
+              // Actually, let's just return mapped. The user can re-order if needed, 
+              // or we rely on the helper if you imported it.
+              return 0; 
+           });
+        }
+        return mapped;
+      };
+
+      if (isDaily) {
+        setDailyActions(updateFn);
+      } else {
+        // FIX: Ensure we use the correct sort logic so it doesn't vanish or jump randomly
+        setScheduleTasks(prev => {
+           const updated = prev.map(t => t.id === taskId ? { ...t, ...baseTask } : t);
+           // Re-Sort using Adjusted Logic
+           return updated.sort((a, b) => {
+             const getMins = (t: string) => {
+                const [h, m] = t.split(':')[0] ? t.split(' - ')[0].split(':').map(Number) : [0,0];
+                return (h < 5 ? h + 24 : h) * 60 + m;
+             };
+             return getMins(a.timeRange) - getMins(b.timeRange);
+           });
+        });
+      }
+
+      await api.apiUpdateTask(taskId, baseTask);
     }
+    
     closeModal();
   };
   
@@ -334,13 +398,13 @@ export function useDashboard() {
   return {
     state: {
       dayStatus, checkInTime, hasSchedule: scheduleTasks.length > 0, // Computed
-      isEditing, isEditingActions, scheduleTasks, dailyActions, flexCapacitySeconds, activeTask, totalVolumeSeconds,
+      isEditing, isEditingActions, scheduleTasks, dailyActions, flexCapacitySeconds, workLeftSeconds, activeTask, totalVolumeSeconds,
       pillState, debugTime: DEBUG_TIME, modalConfig, isSummaryOpen, timerEvents
     },
     actions: {
       startDay, endDay, confirmEndDay, setIsEditing, setIsEditingActions,
       toggleTask, toggleComplete, deleteTask, insertTask, addDailyAction, openAddSchedule, openAddDaily, openEditTask, saveTask, closeModal, setIsSummaryOpen
     },
-    helpers: { isTimeInPast, getNow }
+    helpers: { isTimeInPast: isTimeInPastShifted, getNow }
   };
 }

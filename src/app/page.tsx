@@ -219,7 +219,7 @@ export default function Dashboard() {
                     </div>
 
                     <div className="-mx-6 mb-4"> 
-                      <FlexBucket totalVolumeSeconds={state.totalVolumeSeconds} flexCapacitySeconds={state.flexCapacitySeconds} />
+                      <FlexBucket totalVolumeSeconds={state.totalVolumeSeconds} flexCapacitySeconds={state.flexCapacitySeconds} workLeftSeconds={state.workLeftSeconds}/>
                     </div>
                     
                     <div className="grid grid-cols-4 gap-4">
