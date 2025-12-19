@@ -83,8 +83,7 @@ export default function Dashboard() {
             <TimelineRibbon 
               showCurrentTime={state.dayStatus === 'active'} 
               tasks={state.scheduleTasks} 
-              plannedCheckIn="07:00" plannedSleep="23:00" 
-              debugTime={state.debugTime} 
+              plannedCheckIn="07:00" plannedSleep="23:00"
             />
 
             <div className="px-6 mt-4">
@@ -114,84 +113,88 @@ export default function Dashboard() {
                       )}
                       {state.isEditing && <button onClick={() => actions.setIsEditing(false)} className="flex items-center gap-1.5 text-[10px] font-bold text-emerald-600 bg-emerald-50 px-3 py-1.5 rounded-full hover:bg-emerald-100 transition-colors"><Check size={12} /><span>Save Changes</span></button>}
                     </div>
-
-                    {state.hasSchedule ? (
-                      <div className="space-y-0">
-                        {/* Check-in Marker */}
-                        {(() => {
-                            const firstTask = state.scheduleTasks[0];
-                            const parts = firstTask ? firstTask.timeRange.split('-') : [];
-                            const startTime = parts[0] ? parts[0].trim() : "";
-                            const isFirstStarted = firstTask ? helpers.isTimeInPast(startTime) : false;
-                            
-                            // GAP CHECK: Check-in (07:00) vs First Task Start
-                            // If first task starts at 07:00, then NO GAP -> Hide Button
-                            const isGapless = startTime === "07:00";
-
-                            return (
-                                <TaskRow 
-                                    id="check-in" 
-                                    title={`Checked-in at ${formatCheckInTime(state.checkInTime)}`} 
-                                    timeRange="07:00" 
-                                    progress={100} status="completed" category="CONSISTENCY" icon={Sun} variant="marker"
-                                    isLast={false} isEditing={state.isEditing}
-                                    isInsertionPointPast={isFirstStarted}
-                                    isGapless={isGapless} // NEW
-                                    onInsert={() => actions.openAddSchedule(-1)} // Index -1 for start
-                                />
-                            );
-                        })()}
-
-                        {/* Scheduled Tasks */}
-                        {state.scheduleTasks.map((task, index) => {
-                          const isTaskLocked = task.status === 'completed' || task.status === 'in_progress';
-                          const totalSecs = parseDurationToSeconds(task.timeRange);
-                          const progressPct = totalSecs > 0 ? (task.elapsedSeconds / totalSecs) * 100 : 0;
-
-                          // Insertion Rule: Block if NEXT task has already started
-                          const nextTask = state.scheduleTasks[index + 1];
-                          let isInsertionBlocked = false;
-                          let isGapless = false; // Default: gap exists
-                          if (nextTask) {
-                             const nextParts = nextTask.timeRange.split('-');
-                             const nextStart = nextParts[0] ? nextParts[0].trim() : "";
-                             
-                             // 1. Check if next task started in past
-                             if (helpers.isTimeInPast(nextStart)) isInsertionBlocked = true;
-
-                             // 2. GAP CHECK: Current End vs Next Start
-                             const currParts = task.timeRange.split('-');
-                             const currEnd = currParts[1] ? currParts[1].trim() : "";
-                             
-                             if (currEnd === nextStart) isGapless = true;
-                          }
+                    <div className="space-y-0">
+                      {/* Check-in Marker */}
+                      {(() => {
+                          const firstTask = state.scheduleTasks[0];
+                          const parts = firstTask ? firstTask.timeRange.split('-') : [];
+                          const startTime = parts[0] ? parts[0].trim() : "";
+                          const isFirstStarted = firstTask ? helpers.isTimeInPast(startTime) : false;
+                          const isGapless = startTime === "07:00";
 
                           return (
-                            <div key={task.id} onClick={() => !state.isEditing && task.status !== 'completed' && actions.toggleTask(task.id, false)}>
                               <TaskRow 
-                                id={task.id} title={task.title} timeRange={task.timeRange} status={task.status} category={task.category} icon={task.icon} 
-                                progress={Math.min(progressPct, 100)} 
-                                isLast={false} isEditing={state.isEditing} isLocked={isTaskLocked}
-                                isInsertionPointPast={isInsertionBlocked}
-                                isGapless={isGapless} // NEW
-                                onDelete={() => actions.deleteTask(task.id, false)} 
-                                onInsert={() => actions.openAddSchedule(index)}
-                                onEditClick={() => actions.openEditTask(task)} // Opens modal on click in edit mode
-                                onToggleComplete={() => actions.toggleComplete(task.id, false)}
+                                  id="check-in" 
+                                  title={`Checked-in at ${formatCheckInTime(state.checkInTime)}`} 
+                                  timeRange="07:00" 
+                                  progress={100} status="completed" category="CONSISTENCY" icon={Sun} variant="marker"
+                                  isLast={false} isEditing={state.isEditing}
+                                  isInsertionPointPast={isFirstStarted}
+                                  isGapless={isGapless} // NEW
+                                  onInsert={() => actions.openAddSchedule(-1)} // Index -1 for start
                               />
-                            </div>
                           );
-                        })}
+                      })()}
 
-                        {/* End Day */}
-                        <div className="pt-4 flex flex-col items-center gap-2">
-                           <span className="text-[10px] font-bold text-slate-300">23:00</span>
-                           <button onClick={actions.endDay} className="flex items-center gap-2 text-xs font-bold text-slate-400 bg-slate-100 px-6 py-3 rounded-2xl hover:bg-slate-200 hover:text-slate-600 transition-all active:scale-95">
-                             <LogOut size={16} /><span>Call it a day</span>
-                           </button>
+                      {/* Scheduled Tasks */}
+                      {state.scheduleTasks.map((task, index) => {
+                        const isTaskLocked = task.status === 'completed' || task.status === 'in_progress';
+                        const totalSecs = parseDurationToSeconds(task.timeRange);
+                        const progressPct = totalSecs > 0 ? (task.elapsedSeconds / totalSecs) * 100 : 0;
+
+                        // Insertion Rule: Block if NEXT task has already started
+                        const nextTask = state.scheduleTasks[index + 1];
+                        let isInsertionBlocked = false;
+                        let isGapless = false; // Default: gap exists
+                        if (nextTask) {
+                            const nextParts = nextTask.timeRange.split('-');
+                            const nextStart = nextParts[0] ? nextParts[0].trim() : "";
+                            
+                            // 1. Check if next task started in past
+                            if (helpers.isTimeInPast(nextStart)) isInsertionBlocked = true;
+
+                            // 2. GAP CHECK: Current End vs Next Start
+                            const currParts = task.timeRange.split('-');
+                            const currEnd = currParts[1] ? currParts[1].trim() : "";
+                            
+                            if (currEnd === nextStart) isGapless = true;
+                        }
+
+                        return (
+                          <div key={task.id} onClick={() => !state.isEditing && task.status !== 'completed' && actions.toggleTask(task.id, false)}>
+                            <TaskRow 
+                              id={task.id} title={task.title} timeRange={task.timeRange} status={task.status} category={task.category} icon={task.icon} 
+                              progress={Math.min(progressPct, 100)} 
+                              isLast={false} isEditing={state.isEditing} isLocked={isTaskLocked}
+                              isInsertionPointPast={isInsertionBlocked}
+                              isGapless={isGapless} // NEW
+                              onDelete={() => actions.deleteTask(task.id, false)} 
+                              onInsert={() => actions.openAddSchedule(index)}
+                              onEditClick={() => actions.openEditTask(task)} // Opens modal on click in edit mode
+                              onToggleComplete={() => actions.toggleComplete(task.id, false)}
+                            />
+                          </div>
+                        );
+                      })}
+
+                      {/* 3. Empty State Helper (Optional: Show if no tasks) */}
+                      {state.scheduleTasks.length === 0 && (
+                        <div onClick={() => actions.openAddSchedule(-1)} className="py-8 text-center cursor-pointer group">
+                            <div className="inline-flex items-center justify-center w-12 h-12 rounded-full bg-indigo-50 text-indigo-400 mb-2 group-hover:scale-110 transition-transform">
+                              <Plus size={24} />
+                            </div>
+                            <p className="text-sm font-bold text-slate-400 group-hover:text-indigo-500 transition-colors">Add your first task</p>
                         </div>
+                      )}
+
+                      {/* End Day */}
+                      <div className="pt-4 flex flex-col items-center gap-2">
+                          <span className="text-[10px] font-bold text-slate-300">23:00</span>
+                          <button onClick={actions.endDay} className="flex items-center gap-2 text-xs font-bold text-slate-400 bg-slate-100 px-6 py-3 rounded-2xl hover:bg-slate-200 hover:text-slate-600 transition-all active:scale-95">
+                            <LogOut size={16} /><span>Call it a day</span>
+                          </button>
                       </div>
-                    ) : null}
+                    </div>
                   </section>
 
                   {/* --- DAILY ACTIONS SECTION --- */}
