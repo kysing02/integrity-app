@@ -8,38 +8,90 @@ export function useTaskEngine(initialData: any, dayStatus: string) {
   const [dailyActions, setDailyActions] = useState<TaskItem[]>([]);
   const [timerEvents, setTimerEvents] = useState<TimerEvent[]>([]);
   
+  const [globalActiveTask, setGlobalActiveTask] = useState<TaskItem | null>(null);
+  
   const [flexCapacitySeconds, setFlexCapacitySeconds] = useState(0);
   const [workLeftSeconds, setWorkLeftSeconds] = useState(0);
 
-  // --- 1. SYNC WITH DB LOAD ---
+  // --- 1. SYNC WITH DB LOAD (With Smart Merge) ---
   useEffect(() => {
     if (initialData) {
-      setScheduleTasks(initialData.scheduleTasks || []);
-      setDailyActions(initialData.dailyActions || []);
+      // A. Prepare raw lists from DB
+      let newSchedule = initialData.scheduleTasks || [];
+      let newDaily = initialData.dailyActions || [];
+      
       setTimerEvents(initialData.timerEvents || []);
+
+      // B. SMART MERGE: 
+      // If we have a running Global Task, we must OVERRIDE the DB data for that specific task.
+      // This prevents the UI from flickering to "Pending" or jumping back in time.
+      if (globalActiveTask) {
+         // Sync Schedule List
+         newSchedule = newSchedule.map((t: TaskItem) => 
+            t.id === globalActiveTask.id 
+              ? { ...t, ...globalActiveTask, status: 'in_progress' } // Force Active State
+              : t
+         );
+
+         // Sync Daily List
+         newDaily = newDaily.map((t: TaskItem) => 
+            t.id === globalActiveTask.id 
+              ? { ...t, ...globalActiveTask, status: 'in_progress' } 
+              : t
+         );
+      } else {
+         // If no global task is running locally, check if the DB thinks one is running
+         // (This handles fresh page reloads)
+         const localActive = 
+            newSchedule.find((t: any) => t.status === 'in_progress') || 
+            newDaily.find((t: any) => t.status === 'in_progress');
+         
+         if (localActive) {
+            setGlobalActiveTask(localActive);
+         }
+      }
+
+      setScheduleTasks(newSchedule);
+      setDailyActions(newDaily);
+      
     } else {
       setScheduleTasks([]);
       setDailyActions([]);
       setTimerEvents([]);
     }
-  }, [initialData]);
+  }, [initialData]); // We exclude globalActiveTask to avoid infinite loops, handled by logic above
 
-  // Derived State
-  const activeTask = [...scheduleTasks, ...dailyActions].find(t => t.status === 'in_progress');
-  
+  // --- 2. INITIAL FETCH (Persistence) ---
+  useEffect(() => {
+    api.apiGetGlobalActiveTask().then(task => {
+      if (task) setGlobalActiveTask(task);
+    });
+  }, []);
+
+  // Derived Stats
   const totalVolumeSeconds = 
     scheduleTasks.reduce((acc, t) => acc + parseDurationToSeconds(t.timeRange), 0) + 
     dailyActions.reduce((acc, t) => acc + parseDurationToSeconds(t.timeRange), 0);
 
-  // --- 2. TIMER ENGINE (The Heartbeat) ---
+  // --- 3. TIMER ENGINE ---
   useEffect(() => {
     const interval = setInterval(() => {
       const now = getNow();
       
-      // A. Tick Active Task
-      if (activeTask) {
-        const updater = (list: TaskItem[]) => list.map(t => t.id === activeTask.id ? { ...t, elapsedSeconds: t.elapsedSeconds + 1 } : t);
-        if (activeTask.isDaily) setDailyActions(prev => updater(prev));
+      // A. Tick Global Task
+      if (globalActiveTask) {
+        // 1. Tick the Global Ghost
+        const updatedGlobal = { ...globalActiveTask, elapsedSeconds: globalActiveTask.elapsedSeconds + 1 };
+        setGlobalActiveTask(updatedGlobal);
+
+        // 2. Tick the UI List (Force Status 'in_progress')
+        const updater = (list: TaskItem[]) => list.map(t => 
+          t.id === globalActiveTask.id 
+             ? { ...t, elapsedSeconds: updatedGlobal.elapsedSeconds, status: 'in_progress' } // <--- FIX HERE
+             : t
+        );
+        
+        if (globalActiveTask.isDaily) setDailyActions(prev => updater(prev));
         else setScheduleTasks(prev => updater(prev));
       }
 
@@ -47,8 +99,6 @@ export function useTaskEngine(initialData: any, dayStatus: string) {
       if (dayStatus === 'active') {
           const currentStr = now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: false });
           const currentMins = getAdjustedMinutes(currentStr);
-          
-          // Strict Goal: 23:00
           const targetEndMins = getAdjustedMinutes("23:00"); 
           const totalWindowSeconds = (targetEndMins - currentMins) * 60;
              
@@ -67,56 +117,45 @@ export function useTaskEngine(initialData: any, dayStatus: string) {
       }
     }, 1000);
     return () => clearInterval(interval);
-  }, [activeTask, dayStatus, scheduleTasks, dailyActions]);
+  }, [globalActiveTask, dayStatus, scheduleTasks, dailyActions]);
 
-  // --- 3. ACTIONS (CRUD) ---
+  // --- 4. ACTIONS ---
 
-  const toggleTask = async (id: string, isDaily: boolean) => {
-    const now = getNow().getTime();
+const toggleTask = async (id: string, isDaily: boolean) => {
+    // A. STOP LOGIC (If something is running)
+    if (globalActiveTask) {
+       // 1. Stop in DB (Using new Robust Helper)
+       // We pass the CURRENT elapsedSeconds from our local state, which is accurate
+       await api.apiStopTask(globalActiveTask.id, globalActiveTask.elapsedSeconds);
 
-    // A. Stop Previous Task (if any)
-    if (activeTask) {
-       // Optimistic Stop
-       await api.apiLogTimer(activeTask.id, 'STOP');
-       await api.apiUpdateTaskProgress(activeTask.id, activeTask.elapsedSeconds);
-       await api.apiUpdateTaskStatus(activeTask.id, 'pending');
+       // 2. Clear Global State
+       const stoppingId = globalActiveTask.id;
+       setGlobalActiveTask(null);
+
+       // 3. Update Local UI
+       const stopFn = (list: TaskItem[]) => list.map(t => t.id === stoppingId ? { ...t, status: 'pending' as const } : t);
+       if (globalActiveTask.isDaily) setDailyActions(stopFn);
+       else setScheduleTasks(stopFn);
+
+       if (stoppingId === id) return;
     }
 
-    // B. Identify Target
+    // B. START LOGIC
     const targetList = isDaily ? dailyActions : scheduleTasks;
     const target = targetList.find(t => t.id === id);
-    if (!target) return;
+    
+    if (target) {
+       // 1. Set Global State
+       const startedTask = { ...target, status: 'in_progress' as const };
+       setGlobalActiveTask(startedTask);
 
-    const isStarting = target.status !== 'in_progress';
-    const newAction = isStarting ? 'START' : 'STOP';
+       // 2. Update Local UI
+       const startFn = (list: TaskItem[]) => list.map(t => t.id === id ? { ...t, status: 'in_progress' as const } : t);
+       if (isDaily) setDailyActions(startFn);
+       else setScheduleTasks(startFn);
 
-    // C. Log Event
-    setTimerEvents(prev => [...prev, { id: Math.random().toString(), taskId: id, action: newAction, timestamp: now }]);
-    api.apiLogTimer(id, newAction);
-
-    // D. Update Local State
-    const toggler = (list: TaskItem[]) => list.map(t => {
-      // Toggle Target
-      if (t.id === id) return { ...t, status: isStarting ? 'in_progress' : 'pending' } as TaskItem;
-      // Force others to pending
-      if (t.status === 'in_progress') return { ...t, status: 'pending' } as TaskItem;
-      return t;
-    });
-
-    if (isDaily) { 
-        setDailyActions(prev => toggler(prev)); 
-        setScheduleTasks(prev => prev.map(t => ({ ...t, status: t.status === 'in_progress' ? 'pending' : t.status }))); 
-    } else { 
-        setScheduleTasks(prev => toggler(prev)); 
-        setDailyActions(prev => prev.map(t => ({ ...t, status: t.status === 'in_progress' ? 'pending' : t.status }))); 
-    }
-
-    // E. Sync DB
-    if (isStarting) {
-        await api.apiUpdateTaskStatus(id, 'in_progress');
-    } else {
-        await api.apiUpdateTaskStatus(id, 'pending');
-        await api.apiUpdateTaskProgress(id, target.elapsedSeconds);
+       // 3. Start in DB (Using new Robust Helper)
+       await api.apiStartTask(id);
     }
   };
 
@@ -150,7 +189,6 @@ export function useTaskEngine(initialData: any, dayStatus: string) {
     };
 
     if (isNew) {
-      // --- CREATE ---
       const newTask: TaskItem = {
         ...baseTask,
         id: crypto.randomUUID(),
@@ -175,9 +213,13 @@ export function useTaskEngine(initialData: any, dayStatus: string) {
       await api.apiCreateTask(newTask);
 
     } else {
-      // --- UPDATE ---
       const taskId = modalConfig.initialData!.id!;
       
+      // If we are updating the CURRENTLY RUNNING task, we must update the Global State too
+      if (globalActiveTask && globalActiveTask.id === taskId) {
+          setGlobalActiveTask(prev => prev ? { ...prev, ...baseTask } : null);
+      }
+
       const updateFn = (prev: TaskItem[]) => {
         const mapped = prev.map(t => t.id === taskId ? { ...t, ...baseTask } : t);
         if (!isDaily) {
@@ -201,6 +243,11 @@ export function useTaskEngine(initialData: any, dayStatus: string) {
   };
 
   const deleteTask = async (id: string, isDaily: boolean) => {
+    // If deleting the active task, clear global state
+    if (globalActiveTask && globalActiveTask.id === id) {
+        setGlobalActiveTask(null);
+    }
+
     if (isDaily) {
       setDailyActions(prev => prev.filter(t => t.id !== id));
     } else {
@@ -210,7 +257,7 @@ export function useTaskEngine(initialData: any, dayStatus: string) {
   };
 
   return {
-    scheduleTasks, dailyActions, timerEvents, activeTask,
+    scheduleTasks, dailyActions, timerEvents, activeTask: globalActiveTask,
     flexCapacitySeconds, workLeftSeconds, totalVolumeSeconds,
     setScheduleTasks, setDailyActions, setTimerEvents,
     toggleTask, toggleComplete, saveTask, deleteTask

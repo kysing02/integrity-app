@@ -50,7 +50,7 @@ export function useDashboard() {
      // 2. Close Day
      day.setDayStatus('completed');
      setIsSummaryOpen(false);
-     
+
      // Calculate the ID for the day we are VIEWING
      const userId = await api.getUserId();
      const dateId = getTodayId(userId, day.viewDate);
@@ -145,7 +145,7 @@ export function useDashboard() {
        if (parts[0]) maxTime = parts[0].trim();
     }
 
-    setModalConfig({ isOpen: true, mode: 'add', type: 'schedule', insertIndex: index }); 
+    setModalConfig({ isOpen: true, mode: 'add', type: 'schedule', insertIndex: index, minTime, maxTime }); 
   };
   const openAddDaily = () => setModalConfig({ isOpen: true, mode: 'add', type: 'daily' });
   const openEditTask = (task: any) => setModalConfig({ isOpen: true, mode: 'edit', type: task.isDaily ? 'daily' : 'schedule', initialData: task });

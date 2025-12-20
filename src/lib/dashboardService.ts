@@ -5,18 +5,29 @@ import { getIconComponent, getIconName } from './iconMap'; // Helper still neede
 
 // --- DATA MAPPERS (DB <-> App) ---
 
-const mapTaskFromDB = (dbTask: any): TaskItem => ({
-  id: dbTask.id,
-  title: dbTask.title,
-  timeRange: dbTask.time_range,
-  score: 0,
-  status: dbTask.status,
-  category: dbTask.category,
-  // 1. FIX READ: Use 'icon' column
-  icon: getIconComponent(dbTask.icon), 
-  elapsedSeconds: dbTask.elapsed_seconds,
-  isDaily: dbTask.is_daily
-});
+const mapTaskFromDB = (dbTask: any): TaskItem => {
+  let adjustedSeconds = dbTask.elapsed_seconds;
+
+  // IF TASK IS RUNNING: Add the time passed since it started
+  if (dbTask.status === 'in_progress' && dbTask.last_started_at) {
+    const now = new Date().getTime();
+    const start = new Date(dbTask.last_started_at).getTime();
+    const diff = Math.floor((now - start) / 1000); // Difference in seconds
+    adjustedSeconds += diff;
+  }
+
+  return {
+    id: dbTask.id,
+    title: dbTask.title,
+    timeRange: dbTask.time_range,
+    score: 0,
+    status: dbTask.status,
+    category: dbTask.category,
+    icon: getIconComponent(dbTask.icon),
+    elapsedSeconds: adjustedSeconds, // <--- USE CALCULATED VALUE
+    isDaily: dbTask.is_daily
+  };
+};
 
 // --- CONSTANTS ---
 const GUEST_ID = '00000000-0000-0000-0000-000000000000';
@@ -106,6 +117,42 @@ export const apiEndDay = async (specificDayId?: string) => {
   }
 };
 
+// 2. UPDATE START LOGIC (New Helper)
+export const apiStartTask = async (taskId: string) => {
+  const userId = await getUserId();
+  
+  // Set Status AND Timestamp
+  await supabase
+    .from('tasks')
+    .update({ 
+      status: 'in_progress', 
+      last_started_at: new Date().toISOString() 
+    })
+    .eq('id', taskId)
+    .eq('user_id', userId);
+    
+  await apiLogTimer(taskId, 'START');
+};
+
+// 3. UPDATE STOP LOGIC (New Helper)
+export const apiStopTask = async (taskId: string, totalSeconds: number) => {
+  const userId = await getUserId();
+
+  // Update Progress, Set Status to Pending, CLEAR Timestamp
+  await supabase
+    .from('tasks')
+    .update({ 
+      status: 'pending', 
+      elapsed_seconds: totalSeconds,
+      last_started_at: null 
+    })
+    .eq('id', taskId)
+    .eq('user_id', userId);
+
+  await apiLogTimer(taskId, 'STOP');
+};
+
+
 export const apiCreateTask = async (task: TaskItem) => {
   const userId = await getUserId();
   // Be careful: if editing a future/past day, we should probably pass the dayId in.
@@ -178,4 +225,21 @@ export const apiDeleteTask = async (taskId: string) => {
   const userId = await getUserId();
   if (!userId) return;
   await supabase.from('tasks').delete().eq('id', taskId).eq('user_id', userId);
+};
+
+export const apiGetGlobalActiveTask = async (): Promise<TaskItem | null> => {
+  const userId = await getUserId();
+  
+  // Find any task where status is 'in_progress'
+  const { data, error } = await supabase
+    .from('tasks')
+    .select('*')
+    .eq('user_id', userId)
+    .eq('status', 'in_progress')
+    .maybeSingle();
+
+  if (error) console.error("Error fetching global active task:", error);
+  if (!data) return null;
+
+  return mapTaskFromDB(data);
 };
