@@ -1,5 +1,6 @@
 "use client";
 
+import { useEffect, useRef } from 'react'; // <--- IMPORTED
 import { Clock } from 'lucide-react';
 
 // --- COMPONENTS ---
@@ -8,7 +9,7 @@ import DashboardNavbar from '@/components/dashboard/DashboardNavbar';
 import DashboardHeader from '@/components/dashboard/DashboardHeader';
 import TaskEditorModal from '@/components/dashboard/TaskEditorModal';
 import DaySummaryModal from '@/components/dashboard/DaySummaryModal';
-import LoadingSkeleton from '@/components/dashboard/LoadingSkeleton'; // <--- IMPORT
+import LoadingSkeleton from '@/components/dashboard/LoadingSkeleton';
 
 // --- NEW VIEWS (The Split) ---
 import ViewSleeping from '@/components/dashboard/views/ViewSleeping';
@@ -21,13 +22,24 @@ import { useDashboard } from '@/hooks/useDashboard';
 export default function Dashboard() {
   const { state, actions, helpers } = useDashboard();
   
+  // 1. REF FOR SCROLL CONTAINER
+  const scrollRef = useRef<HTMLDivElement>(null);
+
+  // 2. EFFECT: SCROLL TO TOP ON DATE CHANGE
+  useEffect(() => {
+    if (scrollRef.current) {
+      scrollRef.current.scrollTop = 0;
+    }
+  }, [state.viewDate]); // Trigger whenever the date changes
+
+  // Helper Formatter
   const formatCheckInTime = (date: Date | null) => 
     date ? date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : "--:--";
   
   return (
     <main className="h-full w-full bg-slate-50 text-slate-900 font-sans relative overflow-hidden flex flex-col">
       
-      {/* 1. GLOBAL HEADER (Always Visible - Date updates immediately) */}
+      {/* GLOBAL HEADER */}
       <DashboardHeader 
         hasSchedule={state.hasSchedule} 
         isPast={state.isPast} 
@@ -40,7 +52,7 @@ export default function Dashboard() {
         onJumpToToday={actions.goToToday}
       />
       
-      {/* 2. GLOBAL MODALS */}
+      {/* GLOBAL MODALS */}
       <TaskEditorModal 
         isOpen={state.modalConfig.isOpen}
         mode={state.modalConfig.mode}
@@ -68,11 +80,14 @@ export default function Dashboard() {
         currentDate={helpers.getNow()}
       />
 
-      {/* 3. SCROLLABLE CONTENT AREA */}
-      <div className="scroller flex-1 overflow-y-auto overflow-x-hidden no-scrollbar">
+      {/* 3. SCROLLABLE CONTENT AREA - ATTACHED REF HERE */}
+      <div 
+        ref={scrollRef} // <--- ATTACH REF
+        className="scroller flex-1 overflow-y-auto overflow-x-hidden no-scrollbar scroll-smooth"
+      >
         <div className="min-h-[101%] pb-48"> 
             
-            {/* --- LOADING STATE --- */}
+            {/* LOADING STATE */}
             {state.isLoading ? (
                <LoadingSkeleton />
             ) : (
@@ -129,7 +144,7 @@ export default function Dashboard() {
         </div>
       </div> 
       
-      {/* 4. GLOBAL BOTTOM NAV */}
+      {/* GLOBAL BOTTOM NAV */}
       <DashboardNavbar activeTask={state.activeTask} />
     </main>
   );

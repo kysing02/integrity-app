@@ -1,19 +1,7 @@
 import { supabase } from './supabase';
-import { TaskItem, DayData } from '@/types/dashboard';
-import { 
-  Brain, Users, Dumbbell, Pencil, BookOpen, Brush, Sparkles, 
-  Coffee, Sun, Briefcase, Utensils, Music, ShoppingCart, Code, Tv 
-} from 'lucide-react';
+import { TaskItem } from '@/types/dashboard';
 import { getTodayId } from './supabase';
-
-// --- ICON MAPPER ---
-const ICON_MAP: Record<string, any> = {
-  'Brain': Brain, 'Users': Users, 'Dumbbell': Dumbbell, 'Pencil': Pencil,
-  'BookOpen': BookOpen, 'Brush': Brush, 'Sparkles': Sparkles, 'Coffee': Coffee,
-  'Sun': Sun, 'Briefcase': Briefcase, 'Utensils': Utensils, 'Music': Music,
-  'ShoppingCart': ShoppingCart, 'Code': Code, 'Tv': Tv,
-  'Default': Brain
-};
+import { getIconComponent, getIconName } from './iconMap'; // Helper still needed for conversion
 
 // --- DATA MAPPERS (DB <-> App) ---
 
@@ -21,26 +9,21 @@ const mapTaskFromDB = (dbTask: any): TaskItem => ({
   id: dbTask.id,
   title: dbTask.title,
   timeRange: dbTask.time_range,
-  score: 0, // Calculated field, default 0
+  score: 0,
   status: dbTask.status,
   category: dbTask.category,
-  icon: ICON_MAP[dbTask.icon] || Brain,
+  // 1. FIX READ: Use 'icon' column
+  icon: getIconComponent(dbTask.icon), 
   elapsedSeconds: dbTask.elapsed_seconds,
   isDaily: dbTask.is_daily
 });
 
-// --- 1. USE A FAKE GUEST ID ---
-// A valid UUID so the database doesn't complain
-
+// --- CONSTANTS ---
 const GUEST_ID = '00000000-0000-0000-0000-000000000000';
 
 // --- API FUNCTIONS ---
 
 export const getUserId = async () => {
-  // SKIP AUTH CHECK for now
-  // const { data } = await supabase.auth.getUser();
-  // return data.user?.id;
-  
   return GUEST_ID;
 };
 
@@ -60,7 +43,7 @@ export const fetchDayData = async (dateId: string) => {
   if (error) console.error("Error fetching day:", error);
   if (!day) return null;
 
-  // 2. Get Tasks (Same as before)
+  // 2. Get Tasks
   const { data: tasks } = await supabase
     .from('tasks')
     .select('*')
@@ -68,12 +51,12 @@ export const fetchDayData = async (dateId: string) => {
     .eq('user_id', userId)
     .order('created_at', { ascending: true });
 
-  // 3. Get Timer Logs (Same as before)
+  // 3. Get Timer Logs
   const { data: logs } = await supabase
     .from('timer_logs')
     .select('*')
     .gte('recorded_at', `${dateOnly}T00:00:00`)
-    .lte('recorded_at', `${dateOnly}T23:59:59`) // Note: This might need shifting logic later for 5AM, but okay for now
+    .lte('recorded_at', `${dateOnly}T23:59:59`)
     .eq('user_id', userId);
 
   const appTasks = (tasks || []).map(mapTaskFromDB);
@@ -81,7 +64,7 @@ export const fetchDayData = async (dateId: string) => {
   return {
     status: day.status,
     checkInTime: day.check_in_time ? new Date(day.check_in_time) : null,
-    completedAt: day.completed_at ? new Date(day.completed_at) : null, // <--- NEW FIELD
+    completedAt: day.completed_at ? new Date(day.completed_at) : null,
     scheduleTasks: appTasks.filter(t => !t.isDaily),
     dailyActions: appTasks.filter(t => t.isDaily),
     timerEvents: (logs || []).map(l => ({
@@ -93,10 +76,8 @@ export const fetchDayData = async (dateId: string) => {
   };
 };
 
-// UPDATE THIS FUNCTION TO ACCEPT OPTIONAL ID
 export const apiStartDay = async (specificDateId?: string) => {
   const userId = await getUserId();
-  // If ID provided, use it. Otherwise generate for Today.
   const dateId = specificDateId || getTodayId(userId); 
 
   await supabase.from('days').insert({
@@ -107,40 +88,40 @@ export const apiStartDay = async (specificDateId?: string) => {
   });
 };
 
-export const apiEndDay = async () => {
+export const apiEndDay = async (specificDayId?: string) => {
   const userId = await getUserId();
-  const dateId = getTodayId(userId);
-
-  await supabase.from('days').update({
-    status: 'completed',
-    completed_at: new Date().toISOString()
-  }).eq('id', dateId);
+  
+  if (specificDayId) {
+      await supabase
+        .from('days')
+        .update({ status: 'completed', completed_at: new Date().toISOString() })
+        .eq('id', specificDayId)
+        .eq('user_id', userId);
+  } else {
+      await supabase
+        .from('days')
+        .update({ status: 'completed', completed_at: new Date().toISOString() })
+        .eq('status', 'active')
+        .eq('user_id', userId);
+  }
 };
 
-// --- 2. UPDATE CREATE TASK ---
-// We need to be careful with the icon mapping logic we discussed before
 export const apiCreateTask = async (task: TaskItem) => {
   const userId = await getUserId();
-  const dateId = getTodayId(userId);
+  // Be careful: if editing a future/past day, we should probably pass the dayId in.
+  // For now, this assumes "Today", but we might need to update this signature later.
+  const dateId = getTodayId(userId); 
   
-  // MAP ICON FUNCTION TO STRING NAME
-  // This prevents the "object" error you saw earlier
-  let iconName = 'Brain'; // Default
-  
-  // We need to match the function back to a string name
-  // Note: This requires you to import the ICON_MAP or recreate it here.
-  // For safety, let's just default to 'Brain' if you haven't set up the map export yet.
-  // Ideally, move ICON_MAP to a shared file or export it here.
-  
-  // Simple check if you passed a string (from localstorage fix) or function
-  if (typeof task.icon === 'string') iconName = task.icon;
+  // Convert Component -> String
+  const iconName = getIconName(task.icon);
 
   const { error } = await supabase.from('tasks').insert({
     id: task.id,
     day_id: dateId,
     user_id: userId,
     title: task.title,
-    icon: iconName, // Sending String
+    // 2. FIX INSERT: Use 'icon' column
+    icon: iconName, 
     category: task.category,
     time_range: task.timeRange,
     is_daily: task.isDaily || false,
@@ -160,14 +141,13 @@ export const apiUpdateTask = async (taskId: string, updates: Partial<TaskItem>) 
   if (updates.timeRange) dbUpdates.time_range = updates.timeRange;
   if (updates.category) dbUpdates.category = updates.category;
   
-  // Map icon string if present
-  if (updates.icon && typeof updates.icon === 'string') {
-    dbUpdates.icon = updates.icon;
+  // 3. FIX UPDATE: Handle Component -> String conversion for 'icon' column
+  if (updates.icon) {
+    dbUpdates.icon = getIconName(updates.icon);
   }
-  // If updates.icon is a function (React component), we ignore it for DB 
-  // because we can't save functions. The creation logic handles the mapping.
 
-  await supabase.from('tasks').update(dbUpdates).eq('id', taskId).eq('user_id', userId);
+  const { error } = await supabase.from('tasks').update(dbUpdates).eq('id', taskId).eq('user_id', userId);
+  if (error) console.error("Supabase Update Error:", error);
 };
 
 export const apiUpdateTaskStatus = async (taskId: string, status: string) => {
@@ -179,7 +159,6 @@ export const apiUpdateTaskStatus = async (taskId: string, status: string) => {
 export const apiUpdateTaskProgress = async (taskId: string, seconds: number) => {
   const userId = await getUserId();
   if (!userId) return;
-  // We don't await this (fire and forget) to keep UI snappy
   supabase.from('tasks').update({ elapsed_seconds: seconds }).eq('id', taskId).eq('user_id', userId).then();
 };
 

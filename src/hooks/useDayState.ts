@@ -1,28 +1,60 @@
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo, useRef } from 'react';
 import { getTodayId } from '@/lib/supabase';
 import * as api from '@/lib/dashboardService';
 
 export function useDayState() {
-  const [viewDate, setViewDate] = useState(() => {
+  // Helper to calculate Logical Today (5AM rule)
+  const getLogicalToday = () => {
     const d = new Date();
     if (d.getHours() < 5) d.setDate(d.getDate() - 1);
+    d.setHours(0, 0, 0, 0);
     return d;
-  });
+  };
+
+  const [viewDate, setViewDate] = useState(() => getLogicalToday());
 
   const [dayStatus, setDayStatus] = useState<'sleeping' | 'active' | 'completed'>('sleeping');
   const [checkInTime, setCheckInTime] = useState<Date | null>(null);
   const [completedAt, setCompletedAt] = useState<Date | null>(null);
+  const [initialData, setInitialData] = useState<any>(null);
   const [isLoading, setIsLoading] = useState(true);
 
-  // These hold the raw data payload to pass to the engine
-  const [initialData, setInitialData] = useState<any>(null);
+  // --- BOUNDARY WATCHER (THE FIX) ---
+  // Checks every minute if we crossed 5AM. 
+  // If we are currently viewing "Today", we auto-update to the "New Today".
+  useEffect(() => {
+    const checkBoundary = () => {
+      const currentLogicalToday = getLogicalToday();
+      
+      // Compare timestamps
+      if (currentLogicalToday.getTime() !== viewDate.getTime()) {
+         // Only auto-update if we were looking at the "Old Today"
+         // If user manually navigated to 3 days ago, don't force them back.
+         const previousLogicalToday = new Date(currentLogicalToday);
+         previousLogicalToday.setDate(previousLogicalToday.getDate() - 1);
+
+         if (viewDate.getTime() === previousLogicalToday.getTime()) {
+             console.log("5AM Boundary Crossed: Refreshing View to New Day");
+             setViewDate(currentLogicalToday);
+         }
+      }
+    };
+
+    const interval = setInterval(checkBoundary, 60000); // Check every minute
+    
+    // Also check on window focus (e.g. switching back to tab)
+    const onFocus = () => checkBoundary();
+    window.addEventListener('focus', onFocus);
+
+    return () => {
+      clearInterval(interval);
+      window.removeEventListener('focus', onFocus);
+    };
+  }, [viewDate]); // Re-bind when viewDate updates
 
   // --- DERIVED DATES ---
   const dateState = useMemo(() => {
-    const logicalToday = new Date();
-    if (logicalToday.getHours() < 5) logicalToday.setDate(logicalToday.getDate() - 1);
-    logicalToday.setHours(0, 0, 0, 0);
-
+    const logicalToday = getLogicalToday();
     const view = new Date(viewDate);
     view.setHours(0, 0, 0, 0);
 
@@ -41,33 +73,31 @@ export function useDayState() {
   };
   
   const goToToday = () => {
-    const d = new Date();
-    if (d.getHours() < 5) d.setDate(d.getDate() - 1);
-    setViewDate(d);
+    setViewDate(getLogicalToday());
   };
 
   // --- LOAD DATA ---
   useEffect(() => {
     const load = async () => {
-    setIsLoading(true);
+      setIsLoading(true);
 
       const userId = await api.getUserId();
       const dateId = getTodayId(userId, viewDate);
       
-      setInitialData(null); // Reset
+      setInitialData(null); 
       const data = await api.fetchDayData(dateId);
 
       if (data) {
         setDayStatus(data.status as any);
         setCheckInTime(data.checkInTime);
         setCompletedAt(data.completedAt);
-        setInitialData(data); // Pass this to Task Engine
+        setInitialData(data); 
       } else {
         setDayStatus('sleeping');
         setCheckInTime(null);
         setCompletedAt(null);
       }
-
+      
       setIsLoading(false);
     };
     load();

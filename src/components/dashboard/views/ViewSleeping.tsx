@@ -1,5 +1,5 @@
 import React from 'react';
-import { Coffee, Sun, Calendar, Brain, History } from 'lucide-react';
+import { Coffee, Sun, Calendar, Brain, History, RotateCcw } from 'lucide-react';
 
 interface ViewSleepingProps {
   isFuture: boolean;
@@ -9,6 +9,7 @@ interface ViewSleepingProps {
   actions: {
     startDay: () => void;
     navigateDay: (offset: number) => void;
+    goToToday: () => void; // <--- Ensure this is in the interface
   };
 }
 
@@ -47,15 +48,10 @@ const ViewSleeping = ({ isFuture, isPast, isToday, viewDate, actions }: ViewSlee
           </p>
           
           <button 
-             onClick={() => {
-                 const today = new Date();
-                 const diffTime = Math.abs(today.getTime() - viewDate.getTime());
-                 const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24)); 
-                 actions.navigateDay(diffDays);
-             }}
+             onClick={actions.goToToday} // <--- CLEAN FIX
              className="bg-indigo-600 text-white font-bold px-8 py-4 rounded-2xl shadow-lg shadow-indigo-200 active:scale-95 transition-all flex items-center gap-2 mb-4"
           >
-            <span>Go to Today</span>
+            <RotateCcw size={18} /><span>Go to Today</span>
           </button>
         </div>
       )}
