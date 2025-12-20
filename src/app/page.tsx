@@ -8,6 +8,7 @@ import DashboardNavbar from '@/components/dashboard/DashboardNavbar';
 import DashboardHeader from '@/components/dashboard/DashboardHeader';
 import TaskEditorModal from '@/components/dashboard/TaskEditorModal';
 import DaySummaryModal from '@/components/dashboard/DaySummaryModal';
+import LoadingSkeleton from '@/components/dashboard/LoadingSkeleton'; // <--- IMPORT
 
 // --- NEW VIEWS (The Split) ---
 import ViewSleeping from '@/components/dashboard/views/ViewSleeping';
@@ -20,17 +21,16 @@ import { useDashboard } from '@/hooks/useDashboard';
 export default function Dashboard() {
   const { state, actions, helpers } = useDashboard();
   
-  // Helper Formatter for the Navbar/Pills
   const formatCheckInTime = (date: Date | null) => 
     date ? date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : "--:--";
   
   return (
     <main className="h-full w-full bg-slate-50 text-slate-900 font-sans relative overflow-hidden flex flex-col">
       
-      {/* 1. GLOBAL HEADER (Always Visible) */}
+      {/* 1. GLOBAL HEADER (Always Visible - Date updates immediately) */}
       <DashboardHeader 
         hasSchedule={state.hasSchedule} 
-        isPast={state.isPast} // Uses the new state from useDayState
+        isPast={state.isPast} 
         isEditing={state.isEditing} 
         isEditingActions={state.isEditingActions} 
         onFinishEdit={() => { actions.setIsEditing(false); actions.setIsEditingActions(false); }} 
@@ -39,7 +39,7 @@ export default function Dashboard() {
         onNextDay={() => actions.navigateDay(1)}
       />
       
-      {/* 2. GLOBAL MODALS (Orchestrated by Controller) */}
+      {/* 2. GLOBAL MODALS */}
       <TaskEditorModal 
         isOpen={state.modalConfig.isOpen}
         mode={state.modalConfig.mode}
@@ -71,54 +71,60 @@ export default function Dashboard() {
       <div className="scroller flex-1 overflow-y-auto overflow-x-hidden no-scrollbar">
         <div className="min-h-[101%] pb-48"> 
             
-            {/* A. STATUS PILL (Hidden if Completed) */}
-            {state.dayStatus !== 'completed' && (
-              <div className={`mt-6 mb-2 flex items-center justify-center gap-2 text-xs font-semibold py-2 rounded-full px-4 w-fit mx-auto border shadow-sm ${state.pillState.color}`}>
-                <Clock size={12} />
-                <span>{state.pillState.text}</span>
-              </div>
+            {/* --- LOADING STATE --- */}
+            {state.isLoading ? (
+               <LoadingSkeleton />
+            ) : (
+               <>
+                 {/* A. STATUS PILL */}
+                 {state.dayStatus !== 'completed' && (
+                   <div className={`mt-6 mb-2 flex items-center justify-center gap-2 text-xs font-semibold py-2 rounded-full px-4 w-fit mx-auto border shadow-sm ${state.pillState.color}`}>
+                     <Clock size={12} />
+                     <span>{state.pillState.text}</span>
+                   </div>
+                 )}
+
+                 {/* B. TIMELINE RIBBON */}
+                 {state.dayStatus !== 'completed' && (
+                   <TimelineRibbon 
+                     showCurrentTime={state.dayStatus === 'active'} 
+                     tasks={state.scheduleTasks} 
+                     plannedCheckIn="07:00" plannedSleep="23:00"
+                   />
+                 )}
+
+                 <div className="px-6 mt-4">
+                   
+                   {/* VIEW 1: SLEEPING */}
+                   {state.dayStatus === 'sleeping' && (
+                      <ViewSleeping 
+                        isFuture={state.isFuture} 
+                        isPast={state.isPast} 
+                        isToday={state.isToday} 
+                        viewDate={state.viewDate} 
+                        actions={actions} 
+                      />
+                   )}
+
+                   {/* VIEW 2: ACTIVE */}
+                   {state.dayStatus === 'active' && (
+                      <ViewActive 
+                         state={state} 
+                         actions={actions} 
+                         helpers={helpers} 
+                         formatCheckInTime={formatCheckInTime} 
+                      />
+                   )}
+
+                   {/* VIEW 3: COMPLETED */}
+                   {state.dayStatus === 'completed' && (
+                      <ViewCompleted state={state} helpers={helpers} />
+                   )}
+                   
+                 </div>
+               </>
             )}
-
-            {/* B. TIMELINE RIBBON (Hidden if Completed) */}
-            {state.dayStatus !== 'completed' && (
-              <TimelineRibbon 
-                showCurrentTime={state.dayStatus === 'active'} 
-                tasks={state.scheduleTasks} 
-                plannedCheckIn="07:00" plannedSleep="23:00"
-              />
-            )}
-
-            <div className="px-6 mt-4">
-              
-              {/* === VIEW SWITCHER === */}
-
-              {/* VIEW 1: SLEEPING (Future/Past/Today) */}
-              {state.dayStatus === 'sleeping' && (
-                 <ViewSleeping 
-                   isFuture={state.isFuture} 
-                   isPast={state.isPast} 
-                   isToday={state.isToday} 
-                   viewDate={state.viewDate} 
-                   actions={actions} 
-                 />
-              )}
-
-              {/* VIEW 2: ACTIVE (The Dashboard) */}
-              {state.dayStatus === 'active' && (
-                 <ViewActive 
-                    state={state} 
-                    actions={actions} 
-                    helpers={helpers} 
-                    formatCheckInTime={formatCheckInTime} 
-                 />
-              )}
-
-              {/* VIEW 3: COMPLETED (The Receipt) */}
-              {state.dayStatus === 'completed' && (
-                 <ViewCompleted state={state} helpers={helpers} />
-              )}
-              
-            </div>
+            
         </div>
       </div> 
       

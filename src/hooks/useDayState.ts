@@ -12,7 +12,8 @@ export function useDayState() {
   const [dayStatus, setDayStatus] = useState<'sleeping' | 'active' | 'completed'>('sleeping');
   const [checkInTime, setCheckInTime] = useState<Date | null>(null);
   const [completedAt, setCompletedAt] = useState<Date | null>(null);
-  
+  const [isLoading, setIsLoading] = useState(true);
+
   // These hold the raw data payload to pass to the engine
   const [initialData, setInitialData] = useState<any>(null);
 
@@ -48,6 +49,8 @@ export function useDayState() {
   // --- LOAD DATA ---
   useEffect(() => {
     const load = async () => {
+    setIsLoading(true);
+
       const userId = await api.getUserId();
       const dateId = getTodayId(userId, viewDate);
       
@@ -64,12 +67,14 @@ export function useDayState() {
         setCheckInTime(null);
         setCompletedAt(null);
       }
+
+      setIsLoading(false);
     };
     load();
   }, [viewDate]);
 
   return {
-    viewDate, dayStatus, checkInTime, completedAt, initialData, dateState,
+    viewDate, dayStatus, checkInTime, completedAt, initialData, dateState, isLoading,
     setDayStatus, setCheckInTime, navigateDay, goToToday
   };
 }
