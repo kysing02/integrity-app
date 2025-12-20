@@ -1,29 +1,9 @@
 "use client";
 
 import React, { useState, useEffect } from 'react';
-import { 
-  X, Check, Brain, Users, Dumbbell, Sun, Moon, 
-  Pencil, BookOpen, Brush, Sparkles, Coffee, Briefcase, 
-  Music, Utensils, ShoppingCart, Tv, Code, Plus
-} from 'lucide-react';
+import { X, Check, Brain, Plus } from 'lucide-react';
 import { TaskItem } from '@/types/dashboard';
-
-// --- ICONS CONFIG ---
-const ICON_OPTIONS = [
-  { icon: Brain, label: 'Focus' },
-  { icon: Users, label: 'Meeting' },
-  { icon: Dumbbell, label: 'Fitness' },
-  { icon: Pencil, label: 'Study' },
-  { icon: BookOpen, label: 'Read' },
-  { icon: Brush, label: 'Chore' },
-  { icon: Code, label: 'Code' },
-  { icon: Briefcase, label: 'Work' },
-  { icon: Coffee, label: 'Break' },
-  { icon: Utensils, label: 'Eat' },
-  { icon: Music, label: 'Relax' },
-  { icon: ShoppingCart, label: 'Shop' },
-  { icon: Sparkles, label: 'Other' },
-];
+import IconPicker from '@/components/dashboard/IconPicker'; // New component
 
 interface TaskEditorModalProps {
   isOpen: boolean;
@@ -42,7 +22,7 @@ const TaskEditorModal = ({
 }: TaskEditorModalProps) => {
   const [title, setTitle] = useState("");
   const [category, setCategory] = useState<'EFFICIENCY' | 'CONSISTENCY'>('CONSISTENCY');
-  const [selectedIconName, setSelectedIconName] = useState<string>('Brain');
+  const [selectedIcon, setSelectedIcon] = useState<any>(Brain); // Store component directly
   
   // Schedule Inputs
   const [startTime, setStartTime] = useState("");
@@ -77,7 +57,7 @@ const TaskEditorModal = ({
       if (initialData) {
         setTitle(initialData.title || "");
         setCategory(initialData.category || 'CONSISTENCY');
-        setSelectedIconName('Brain'); // Simplified match logic
+        setSelectedIcon(initialData.icon || Brain); // Load icon component
         
         if (type === 'schedule' && initialData.timeRange) {
           const [s, e] = initialData.timeRange.split(' - ');
@@ -92,6 +72,7 @@ const TaskEditorModal = ({
       } else {
         setTitle("");
         setCategory('CONSISTENCY');
+        setSelectedIcon(Brain);
         if (type === 'schedule') {
           setStartTime(minTime || "09:00");
           setEndTime(maxTime || "10:00"); 
@@ -119,8 +100,7 @@ const TaskEditorModal = ({
       timeRange = str.trim();
     }
 
-    const iconObj = ICON_OPTIONS.find(i => i.label === selectedIconName) || ICON_OPTIONS[0];
-    onSave({ title, category, timeRange, icon: iconObj.icon });
+    onSave({ title, category, timeRange, icon: selectedIcon });
     onClose();
   };
 
@@ -135,11 +115,7 @@ const TaskEditorModal = ({
       {/* DRAWER CONTAINER */}
       <div className="fixed bottom-0 left-0 right-0 bg-white rounded-t-3xl z-[101] shadow-2xl animate-in slide-in-from-bottom duration-300 max-h-[90dvh] flex flex-col">
         
-        {/* SCROLLABLE CONTENT WRAPPER 
-            This ensures that if the keyboard pushes the drawer up, 
-            only this middle section scrolls while footer stays visible if space permits,
-            or scrolls with it.
-        */}
+        {/* SCROLLABLE CONTENT WRAPPER */}
         <div className="overflow-y-auto p-5 pb-2">
 
           {/* HEADER */}
@@ -150,12 +126,10 @@ const TaskEditorModal = ({
               </h3>
               <input 
                 type="text" 
-                name="task_title_no_autofill" // Unique name to prevent autofill
-                id="task_title_input"
-                autoComplete="off" // Primary Disable
-                autoCorrect="off" // Disable spellcheck bar
+                name="task_title_no_autofill"
+                autoComplete="off"
+                autoCorrect="off" 
                 spellCheck="false"
-                data-form-type="other" // Hint to browser
                 value={title}
                 onChange={(e) => setTitle(e.target.value)}
                 placeholder="Title..."
@@ -198,7 +172,6 @@ const TaskEditorModal = ({
                     value={startTime}
                     onChange={(e) => setStartTime(e.target.value)}
                     className="w-full bg-slate-50 text-slate-800 font-bold text-base p-2.5 rounded-xl outline-none focus:ring-2 focus:ring-indigo-100 text-center"
-                    // Time inputs on mobile are native pickers, usually don't trigger text autofill
                   />
                 </div>
                 <div className="text-slate-300">-</div>
@@ -216,10 +189,8 @@ const TaskEditorModal = ({
                  <div className="flex-1 relative">
                    <input 
                      type="number" min="0" max="12"
-                     pattern="\d*" // Forces numeric keypad
+                     pattern="\d*"
                      inputMode="numeric"
-                     name="duration_hours_no_fill"
-                     autoComplete="off"
                      value={durHours}
                      onChange={(e) => setDurHours(e.target.value)}
                      placeholder="0"
@@ -234,8 +205,6 @@ const TaskEditorModal = ({
                      type="number" min="0" max="59"
                      pattern="\d*"
                      inputMode="numeric"
-                     name="duration_mins_no_fill"
-                     autoComplete="off"
                      value={durMins}
                      onChange={(e) => setDurMins(e.target.value)}
                      placeholder="0"
@@ -248,29 +217,15 @@ const TaskEditorModal = ({
             )}
           </div>
 
-          {/* ICON PICKER */}
+          {/* ICON PICKER (REFACTORED) */}
           <div className="mb-2">
             <h4 className="text-[10px] font-bold text-slate-400 uppercase mb-2">Icon</h4>
-            <div className="flex gap-2 overflow-x-auto pb-2 no-scrollbar">
-              {ICON_OPTIONS.map((opt) => (
-                <button
-                  key={opt.label}
-                  onClick={() => setSelectedIconName(opt.label)}
-                  className={`flex-shrink-0 flex flex-col items-center gap-1.5 p-2.5 rounded-xl border transition-all ${
-                    selectedIconName === opt.label 
-                      ? 'border-indigo-500 bg-indigo-50 text-indigo-600' 
-                      : 'border-slate-100 bg-white text-slate-300 hover:border-slate-200'
-                  }`}
-                >
-                  <opt.icon size={18} />
-                </button>
-              ))}
-            </div>
+            <IconPicker selectedIcon={selectedIcon} onChange={setSelectedIcon} />
           </div>
 
         </div>
 
-        {/* FOOTER ACTIONS - Fixed at bottom of drawer */}
+        {/* FOOTER ACTIONS */}
         <div className="p-5 pt-2 flex gap-3 bg-white border-t border-slate-50">
             {mode === 'edit' && onDelete && (
                <button 

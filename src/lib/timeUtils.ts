@@ -133,3 +133,17 @@ export const formatDuration = (seconds: number) => {
   const m = Math.floor((seconds % 3600) / 60);
   return `${h}h ${m}m`;
 };
+
+// --- TIME TRAVEL DEBUGGER ---
+// Change this to "HH:MM" (e.g. "23:30") to test late-night logic.
+// Set to null for real time.
+const DEBUG_TIME: string | null = null; 
+
+export const getNow = (): Date => {
+  const now = new Date();
+  if (DEBUG_TIME) {
+    const [h, m] = DEBUG_TIME.split(':').map(Number);
+    now.setHours(h, m, 0, 0);
+  }
+  return now;
+};
