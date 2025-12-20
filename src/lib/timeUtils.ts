@@ -1,12 +1,24 @@
 import { TaskItem } from '@/types/dashboard';
 
 export const getTodayDateAtTime = (timeStr: string): Date => {
-  // FIX: Safety check for undefined/empty strings
   if (!timeStr) return new Date(); 
 
   const [hours, minutes] = timeStr.split(/[:h]/).map(str => parseInt(str) || 0);
   const date = new Date();
+  
+  // LOGIC FIX:
+  // If the requested time is 00:00-04:59, treat it as "Tomorrow" relative to standard calendar 
+  // IF we are currently in the "Day" (05:00-23:59). 
+  // However, dealing with Date objects in Shifted Time is messy. 
+  // For MVP safety: We perform the standard setHours.
+  // The 'Pill State' comparison logic in useDashboard should ideally use getAdjustedMinutes instead.
+  
   date.setHours(hours, minutes, 0, 0);
+  
+  // Optional: If you strictly want this function to return "The Date Occurring in this Logical Day"
+  // e.g. If today is Dec 20 (logical), and timeStr is "01:00", it implies Dec 21 01:00.
+  // But let's stick to standard behavior to avoid breaking calendar checks unless necessary.
+  
   return date;
 };
 
