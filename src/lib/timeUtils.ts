@@ -147,3 +147,19 @@ export const getNow = (): Date => {
   }
   return now;
 };
+
+/**
+ * Checks if a proposed time range overlaps with an existing range.
+ * Returns TRUE if they overlap.
+ * Respects Shifted Time (e.g. 01:00 is 25:00).
+ */
+export const doRangesOverlap = (rangeA: string, rangeB: string): boolean => {
+  if (!rangeA.includes('-') || !rangeB.includes('-')) return false;
+
+  const [startA, endA] = rangeA.split('-').map(s => getAdjustedMinutes(s.trim()));
+  const [startB, endB] = rangeB.split('-').map(s => getAdjustedMinutes(s.trim()));
+
+  // Standard Overlap Logic: Max(Starts) < Min(Ends)
+  // strictly less than (<) allows abutting (e.g. EndA 13:00 == StartB 13:00 is Allowed)
+  return Math.max(startA, startB) < Math.min(endA, endB);
+};

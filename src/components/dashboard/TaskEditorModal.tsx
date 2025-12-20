@@ -1,15 +1,17 @@
 "use client";
 
-import React, { useState, useEffect } from 'react';
-import { X, Check, Brain, Plus } from 'lucide-react';
+import React, { useState, useEffect ,useMemo } from 'react';
+import { X, Check, Brain, Plus, AlertCircle } from 'lucide-react';
 import { TaskItem } from '@/types/dashboard';
 import IconPicker from '@/components/dashboard/IconPicker'; // New component
+import { getAdjustedMinutes, doRangesOverlap } from '@/lib/timeUtils'; // Import helper
 
 interface TaskEditorModalProps {
   isOpen: boolean;
   mode: 'add' | 'edit';
   type: 'schedule' | 'daily';
   initialData?: Partial<TaskItem>;
+  existingTasks?: TaskItem[];
   minTime?: string;
   maxTime?: string;
   onClose: () => void;
@@ -18,7 +20,7 @@ interface TaskEditorModalProps {
 }
 
 const TaskEditorModal = ({ 
-  isOpen, mode, type, initialData, minTime, maxTime, onClose, onSave, onDelete 
+  isOpen, mode, type, initialData, existingTasks = [], minTime, maxTime, onClose, onSave, onDelete 
 }: TaskEditorModalProps) => {
   const [title, setTitle] = useState("");
   const [category, setCategory] = useState<'EFFICIENCY' | 'CONSISTENCY'>('CONSISTENCY');
@@ -31,6 +33,31 @@ const TaskEditorModal = ({
   // Daily Action Inputs
   const [durHours, setDurHours] = useState("");
   const [durMins, setDurMins] = useState("");
+
+  // --- OVERLAP DETECTION LOGIC ---
+  const conflictError = useMemo(() => {
+    if (type !== 'schedule' || !startTime || !endTime) return null;
+
+    // 1. Convert current input to range string
+    // We assume getAdjustedMinutes handles the wrap around, so we just check strings
+    const currentRange = `${startTime} - ${endTime}`;
+    
+    // 2. Validate Self (Start must be before End)
+    if (getAdjustedMinutes(startTime) >= getAdjustedMinutes(endTime)) {
+        return "End time must be after start time";
+    }
+
+    // 3. Check against existing tasks
+    for (const task of existingTasks) {
+      // If editing, skip self
+      if (mode === 'edit' && initialData?.id === task.id) continue;
+      
+      if (doRangesOverlap(currentRange, task.timeRange)) {
+        return `Clashes with "${task.title}" (${task.timeRange})`;
+      }
+    }
+    return null;
+  }, [startTime, endTime, type, existingTasks, mode, initialData]);
 
   // --- BODY SCROLL LOCK ---
   useEffect(() => {
@@ -87,6 +114,8 @@ const TaskEditorModal = ({
   if (!isOpen) return null;
 
   const handleSave = () => {
+    if (conflictError) return;
+
     let timeRange = "";
     if (type === 'schedule') {
       timeRange = `${startTime} - ${endTime}`;
@@ -106,16 +135,13 @@ const TaskEditorModal = ({
 
   return (
     <>
-      {/* OVERLAY */}
       <div 
         className="fixed inset-0 bg-slate-900/10 backdrop-blur-sm z-[100] transition-opacity animate-in fade-in duration-200"
         onClick={onClose}
       />
       
-      {/* DRAWER CONTAINER */}
       <div className="fixed bottom-0 left-0 right-0 bg-white rounded-t-3xl z-[101] shadow-2xl animate-in slide-in-from-bottom duration-300 max-h-[90dvh] flex flex-col">
         
-        {/* SCROLLABLE CONTENT WRAPPER */}
         <div className="overflow-y-auto p-5 pb-2">
 
           {/* HEADER */}
@@ -126,15 +152,12 @@ const TaskEditorModal = ({
               </h3>
               <input 
                 type="text" 
-                name="task_title_no_autofill"
-                autoComplete="off"
-                autoCorrect="off" 
-                spellCheck="false"
                 value={title}
                 onChange={(e) => setTitle(e.target.value)}
                 placeholder="Title..."
                 className="text-xl font-bold text-slate-800 placeholder:text-slate-300 w-full bg-transparent outline-none border-none p-0 focus:ring-0"
                 autoFocus
+                autoComplete="off"
               />
             </div>
             <button onClick={onClose} className="p-2 bg-slate-50 rounded-full text-slate-400 hover:bg-slate-100 flex-shrink-0">
@@ -142,110 +165,88 @@ const TaskEditorModal = ({
             </button>
           </div>
 
-          {/* CATEGORY */}
+          {/* CATEGORY SELECTOR (Same as before) */}
           <div className="mb-5 flex p-1 bg-slate-100 rounded-xl">
-            <button 
-              onClick={() => setCategory('CONSISTENCY')}
-              className={`flex-1 flex items-center justify-center gap-2 py-1.5 rounded-lg text-[11px] font-bold transition-all ${category === 'CONSISTENCY' ? 'bg-white text-indigo-600 shadow-sm' : 'text-slate-400'}`}
-            >
-              <div className={`w-1.5 h-1.5 rounded-full ${category === 'CONSISTENCY' ? 'bg-indigo-500' : 'bg-slate-300'}`} />
-              Consistency
-            </button>
-            <button 
-              onClick={() => setCategory('EFFICIENCY')}
-              className={`flex-1 flex items-center justify-center gap-2 py-1.5 rounded-lg text-[11px] font-bold transition-all ${category === 'EFFICIENCY' ? 'bg-white text-emerald-600 shadow-sm' : 'text-slate-400'}`}
-            >
-              <div className={`w-1.5 h-1.5 rounded-full ${category === 'EFFICIENCY' ? 'bg-emerald-500' : 'bg-slate-300'}`} />
-              Efficiency
-            </button>
+             {/* ... (Keep existing category buttons) ... */}
+             <button onClick={() => setCategory('CONSISTENCY')} className={`flex-1 flex items-center justify-center gap-2 py-1.5 rounded-lg text-[11px] font-bold transition-all ${category === 'CONSISTENCY' ? 'bg-white text-indigo-600 shadow-sm' : 'text-slate-400'}`}>
+                <div className={`w-1.5 h-1.5 rounded-full ${category === 'CONSISTENCY' ? 'bg-indigo-500' : 'bg-slate-300'}`} /> Consistency
+             </button>
+             <button onClick={() => setCategory('EFFICIENCY')} className={`flex-1 flex items-center justify-center gap-2 py-1.5 rounded-lg text-[11px] font-bold transition-all ${category === 'EFFICIENCY' ? 'bg-white text-emerald-600 shadow-sm' : 'text-slate-400'}`}>
+                <div className={`w-1.5 h-1.5 rounded-full ${category === 'EFFICIENCY' ? 'bg-emerald-500' : 'bg-slate-300'}`} /> Efficiency
+             </button>
           </div>
 
-          {/* TIME INPUTS */}
+          {/* TIME ALLOCATION - UX IMPROVED */}
           <div className="mb-5">
-            <h4 className="text-[10px] font-bold text-slate-400 uppercase mb-2">Time Allocation</h4>
+            <div className="flex justify-between items-baseline mb-2">
+                <h4 className="text-[10px] font-bold text-slate-400 uppercase">Time Allocation</h4>
+                {/* Visual Error Label */}
+                {conflictError && (
+                    <span className="text-[10px] font-bold text-rose-500 flex items-center gap-1 animate-in fade-in">
+                        <AlertCircle size={10} /> {conflictError}
+                    </span>
+                )}
+            </div>
             
             {type === 'schedule' ? (
-              <div className="flex items-center gap-3">
+              <div className={`flex items-center gap-3 p-1 rounded-2xl transition-colors ${conflictError ? 'bg-rose-50 ring-1 ring-rose-200' : ''}`}>
                 <div className="flex-1">
                   <input 
                     type="time" 
                     value={startTime}
                     onChange={(e) => setStartTime(e.target.value)}
-                    className="w-full bg-slate-50 text-slate-800 font-bold text-base p-2.5 rounded-xl outline-none focus:ring-2 focus:ring-indigo-100 text-center"
+                    className={`w-full font-bold text-base p-2.5 rounded-xl outline-none focus:ring-2 text-center transition-all ${conflictError ? 'bg-white text-rose-600 focus:ring-rose-200' : 'bg-slate-50 text-slate-800 focus:ring-indigo-100'}`}
                   />
                 </div>
-                <div className="text-slate-300">-</div>
+                <div className={`text-slate-300 ${conflictError ? 'text-rose-300' : ''}`}>-</div>
                 <div className="flex-1">
                   <input 
                     type="time" 
                     value={endTime}
                     onChange={(e) => setEndTime(e.target.value)}
-                    className="w-full bg-slate-50 text-slate-800 font-bold text-base p-2.5 rounded-xl outline-none focus:ring-2 focus:ring-indigo-100 text-center"
+                    className={`w-full font-bold text-base p-2.5 rounded-xl outline-none focus:ring-2 text-center transition-all ${conflictError ? 'bg-white text-rose-600 focus:ring-rose-200' : 'bg-slate-50 text-slate-800 focus:ring-indigo-100'}`}
                   />
                 </div>
               </div>
             ) : (
+              // DAILY ACTIONS INPUTS (Keep as is)
               <div className="flex items-end gap-3">
                  <div className="flex-1 relative">
-                   <input 
-                     type="number" min="0" max="12"
-                     pattern="\d*"
-                     inputMode="numeric"
-                     value={durHours}
-                     onChange={(e) => setDurHours(e.target.value)}
-                     placeholder="0"
-                     onFocus={(e) => e.target.select()}
-                     className="w-full bg-slate-50 text-slate-800 font-bold text-base p-2.5 pr-8 rounded-xl outline-none focus:ring-2 focus:ring-indigo-100"
-                   />
+                   <input type="number" min="0" max="12" pattern="\d*" inputMode="numeric" value={durHours} onChange={(e) => setDurHours(e.target.value)} placeholder="0" className="w-full bg-slate-50 text-slate-800 font-bold text-base p-2.5 pr-8 rounded-xl outline-none focus:ring-2 focus:ring-indigo-100" />
                    <span className="absolute right-3 top-3 text-[10px] font-bold text-slate-400 pointer-events-none">h</span>
                  </div>
-
                  <div className="flex-1 relative">
-                   <input 
-                     type="number" min="0" max="59"
-                     pattern="\d*"
-                     inputMode="numeric"
-                     value={durMins}
-                     onChange={(e) => setDurMins(e.target.value)}
-                     placeholder="0"
-                     onFocus={(e) => e.target.select()}
-                     className="w-full bg-slate-50 text-slate-800 font-bold text-base p-2.5 pr-8 rounded-xl outline-none focus:ring-2 focus:ring-indigo-100"
-                   />
+                   <input type="number" min="0" max="59" pattern="\d*" inputMode="numeric" value={durMins} onChange={(e) => setDurMins(e.target.value)} placeholder="0" className="w-full bg-slate-50 text-slate-800 font-bold text-base p-2.5 pr-8 rounded-xl outline-none focus:ring-2 focus:ring-indigo-100" />
                    <span className="absolute right-3 top-3 text-[10px] font-bold text-slate-400 pointer-events-none">m</span>
                  </div>
               </div>
             )}
           </div>
 
-          {/* ICON PICKER (REFACTORED) */}
+          {/* ICON PICKER */}
           <div className="mb-2">
             <h4 className="text-[10px] font-bold text-slate-400 uppercase mb-2">Icon</h4>
             <IconPicker selectedIcon={selectedIcon} onChange={setSelectedIcon} />
           </div>
-
         </div>
 
-        {/* FOOTER ACTIONS */}
+        {/* FOOTER */}
         <div className="p-5 pt-2 flex gap-3 bg-white border-t border-slate-50">
             {mode === 'edit' && onDelete && (
-               <button 
-                 onClick={() => { onDelete(); onClose(); }}
-                 className="p-3.5 rounded-xl bg-rose-50 text-rose-500 font-bold hover:bg-rose-100 transition-colors"
-               >
+               <button onClick={() => { onDelete(); onClose(); }} className="p-3.5 rounded-xl bg-rose-50 text-rose-500 font-bold hover:bg-rose-100 transition-colors">
                  <X size={18} />
                </button>
             )}
             
             <button 
               onClick={handleSave}
-              disabled={!title}
-              className="flex-1 bg-slate-900 text-white font-bold text-sm py-3.5 rounded-xl shadow-lg shadow-slate-200 active:scale-95 transition-all flex items-center justify-center gap-2 disabled:opacity-50 disabled:active:scale-100"
+              disabled={!title || !!conflictError} // <--- DISABLE IF CONFLICT
+              className="flex-1 bg-slate-900 text-white font-bold text-sm py-3.5 rounded-xl shadow-lg shadow-slate-200 active:scale-95 transition-all flex items-center justify-center gap-2 disabled:opacity-50 disabled:grayscale disabled:active:scale-100"
             >
               {mode === 'add' ? <Plus size={18} /> : <Check size={18} />}
               <span>{mode === 'add' ? 'Add' : 'Save'}</span>
             </button>
         </div>
-        
       </div>
     </>
   );

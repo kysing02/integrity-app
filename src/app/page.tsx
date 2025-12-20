@@ -45,6 +45,7 @@ export default function Dashboard() {
         mode={state.modalConfig.mode}
         type={state.modalConfig.type}
         initialData={state.modalConfig.initialData}
+        existingTasks={state.scheduleTasks}
         minTime={state.modalConfig.minTime}
         maxTime={state.modalConfig.maxTime}
         onClose={actions.closeModal}

@@ -6,7 +6,7 @@ import { parseDurationToSeconds } from '@/lib/timeUtils';
 // Components
 import TimelineRibbon from '@/components/dashboard/TimelineRibbon';
 import TaskRow from '@/components/dashboard/TaskRow';
-import CheckInRow from '@/components/dashboard/CheckInRow'; // Assumed location
+import CheckInRow from '@/components/dashboard/CheckInRow';
 import FlexBucket from '@/components/dashboard/FlexBucket';
 import TaskCircle from '@/components/dashboard/TaskCircle';
 
@@ -24,6 +24,9 @@ const ViewActive = ({ state, actions, helpers, formatCheckInTime }: ViewActivePr
   const handleDragOver = (e: React.DragEvent, index: number) => { e.preventDefault(); };
   const handleDrop = () => setDraggedItemIndex(null);
 
+  // --- LOGIC: Check if we have tasks ---
+  const hasTasks = state.scheduleTasks.length > 0;
+
   return (
     <>
       <section className="mb-10 animate-in fade-in duration-500">
@@ -38,8 +41,9 @@ const ViewActive = ({ state, actions, helpers, formatCheckInTime }: ViewActivePr
         </div>
 
         <div className="space-y-0">
-          {/* Check-in Marker (Refactored to CheckInRow) */}
-          {(() => {
+          
+          {/* 1. Check-in Marker (HIDE IF NO TASKS) */}
+          {hasTasks && (() => {
               const firstTask = state.scheduleTasks[0];
               const parts = firstTask ? firstTask.timeRange.split('-') : [];
               const startTime = parts[0] ? parts[0].trim() : "";
@@ -55,7 +59,7 @@ const ViewActive = ({ state, actions, helpers, formatCheckInTime }: ViewActivePr
               );
           })()}
 
-          {/* Scheduled Tasks */}
+          {/* 2. Scheduled Tasks */}
           {state.scheduleTasks.map((task: TaskItem, index: number) => {
             const isTaskLocked = task.status === 'completed' || task.status === 'in_progress';
             const totalSecs = parseDurationToSeconds(task.timeRange);
@@ -89,21 +93,26 @@ const ViewActive = ({ state, actions, helpers, formatCheckInTime }: ViewActivePr
             );
           })}
 
-          {/* Empty State */}
-          {state.scheduleTasks.length === 0 && (
-            <div onClick={() => actions.openAddSchedule(-1)} className="py-8 text-center cursor-pointer group">
-                <div className="inline-flex items-center justify-center w-12 h-12 rounded-full bg-indigo-50 text-indigo-400 mb-2 group-hover:scale-110 transition-transform"><Plus size={24} /></div>
-                <p className="text-sm font-bold text-slate-400 group-hover:text-indigo-500 transition-colors">Add your first task</p>
+          {/* 3. Empty State (SHOW ONLY IF NO TASKS) */}
+          {!hasTasks && (
+            <div onClick={() => actions.openAddSchedule(-1)} className="py-8 text-center cursor-pointer group animate-in zoom-in-95 duration-300">
+                <div className="inline-flex items-center justify-center w-16 h-16 rounded-full bg-indigo-50 text-indigo-400 mb-4 group-hover:scale-110 transition-transform shadow-sm ring-4 ring-white">
+                    <Plus size={32} />
+                </div>
+                <p className="text-sm font-bold text-slate-800 group-hover:text-indigo-600 transition-colors">Add your first task</p>
+                <p className="text-xs text-slate-400 mt-1">Start defining your day</p>
             </div>
           )}
 
-          {/* End Day Button */}
-          <div className="pt-4 flex flex-col items-center gap-2">
-              <span className="text-[10px] font-bold text-slate-300">23:00</span>
-              <button onClick={actions.endDay} className="flex items-center gap-2 text-xs font-bold text-slate-400 bg-slate-100 px-6 py-3 rounded-2xl hover:bg-slate-200 hover:text-slate-600 transition-all active:scale-95">
-                <LogOut size={16} /><span>Call it a day</span>
-              </button>
-          </div>
+          {/* 4. End Day Button (HIDE IF NO TASKS) */}
+          {hasTasks && (
+            <div className="pt-4 flex flex-col items-center gap-2">
+                <span className="text-[10px] font-bold text-slate-300">23:00</span>
+                <button onClick={actions.endDay} className="flex items-center gap-2 text-xs font-bold text-slate-400 bg-slate-100 px-6 py-3 rounded-2xl hover:bg-slate-200 hover:text-slate-600 transition-all active:scale-95">
+                  <LogOut size={16} /><span>Call it a day</span>
+                </button>
+            </div>
+          )}
         </div>
       </section>
 

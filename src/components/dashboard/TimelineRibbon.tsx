@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect } from 'react';
 import { TaskItem } from '@/types/dashboard';
-import { getAdjustedMinutes } from '@/lib/timeUtils'; // Import new helper
+import { getAdjustedMinutes } from '@/lib/timeUtils'; 
 
 interface TimelineRibbonProps {
   showCurrentTime?: boolean;
@@ -63,6 +63,8 @@ const TimelineRibbon = ({
     return () => clearInterval(interval);
   }, [showCurrentTime, debugTime]);
 
+  const hasTasks = tasks.length > 0;
+
   return (
     <div className="w-full space-y-3 px-6 py-4">
       <div className="relative h-6 w-full bg-slate-100/80 backdrop-blur-sm overflow-hidden rounded-full border border-slate-200">
@@ -70,40 +72,45 @@ const TimelineRibbon = ({
         {/* DYNAMIC BACKGROUND BLOCKS */}
         <div className="absolute inset-0">
            
-           {/* 1. MORNING BLOCK (05:00 -> Planned Check-in) */}
-           {(() => {
-             const endMins = getAdjustedMinutes(plannedCheckIn); // e.g. 07:00 -> 420
-             const startMins = 300; // 05:00
-             
-             const diff = endMins - startMins;
-             const width = (diff / TOTAL_DAY_MINUTES) * 100;
-             
-             return (
-               <div 
-                 className="absolute h-full bg-slate-400/20 border-r border-white/10"
-                 style={{ left: '0%', width: `${Math.max(0, width)}%` }}
-                 title="Morning Routine"
-               />
-             );
-           })()}
+           {/* ONLY SHOW ROUTINE BLOCKS IF TASKS EXIST */}
+           {hasTasks && (
+             <>
+               {/* 1. MORNING BLOCK (05:00 -> Planned Check-in) */}
+               {(() => {
+                 const endMins = getAdjustedMinutes(plannedCheckIn); 
+                 const startMins = 300; // 05:00
+                 
+                 const diff = endMins - startMins;
+                 const width = (diff / TOTAL_DAY_MINUTES) * 100;
+                 
+                 return (
+                   <div 
+                     className="absolute h-full bg-slate-400/20 border-r border-white/10"
+                     style={{ left: '0%', width: `${Math.max(0, width)}%` }}
+                     title="Morning Routine"
+                   />
+                 );
+               })()}
 
-           {/* 2. NIGHT BLOCK (Planned Sleep -> 05:00 Next Day) */}
-           {(() => {
-             const startMins = getAdjustedMinutes(plannedSleep); // e.g. 23:00 -> 1380
-             const endMins = 1740; // 29:00 (05:00 next day)
-             
-             const diff = endMins - startMins;
-             const width = (diff / TOTAL_DAY_MINUTES) * 100;
-             const left = mapMinutesToPercent(startMins);
+               {/* 2. NIGHT BLOCK (Planned Sleep -> 05:00 Next Day) */}
+               {(() => {
+                 const startMins = getAdjustedMinutes(plannedSleep); 
+                 const endMins = 1740; // 29:00 (05:00 next day)
+                 
+                 const diff = endMins - startMins;
+                 const width = (diff / TOTAL_DAY_MINUTES) * 100;
+                 const left = mapMinutesToPercent(startMins);
 
-             return (
-               <div 
-                 className="absolute h-full bg-slate-400/20 border-l border-white/10"
-                 style={{ left: `${left}%`, width: `${width}%` }}
-                 title="Night Routine"
-               />
-             );
-           })()}
+                 return (
+                   <div 
+                     className="absolute h-full bg-slate-400/20 border-l border-white/10"
+                     style={{ left: `${left}%`, width: `${width}%` }}
+                     title="Night Routine"
+                   />
+                 );
+               })()}
+             </>
+           )}
 
            {/* 3. SCHEDULED TASKS */}
            {tasks.map((task) => {
@@ -112,7 +119,6 @@ const TimelineRibbon = ({
 
              const [startStr, endStr] = task.timeRange.split(' - ');
              
-             // Use new helper
              const startMins = getAdjustedMinutes(startStr);
              const endMins = getAdjustedMinutes(endStr);
 
