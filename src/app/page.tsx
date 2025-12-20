@@ -37,6 +37,7 @@ export default function Dashboard() {
         viewDate={state.viewDate}
         onPrevDay={() => actions.navigateDay(-1)}
         onNextDay={() => actions.navigateDay(1)}
+        onJumpToToday={actions.goToToday}
       />
       
       {/* 2. GLOBAL MODALS */}
