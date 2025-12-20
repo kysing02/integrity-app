@@ -42,13 +42,21 @@ export function useDashboard() {
 
   // --- PILL LOGIC (Pure UI Calculation) ---
 // --- PILL STATE LOGIC ---
-  const pillState = useMemo(() => {
-    // 1. Static States
-    if (day.dayStatus === 'sleeping') return { text: "Ready for your day?", color: "text-slate-500 border-slate-200 bg-white" };
+const pillState = useMemo(() => {
+    // 1. Handling "Sleeping" (Empty) Days
+    if (day.dayStatus === 'sleeping') {
+        if (day.dateState.isPast) return { text: "No Record", color: "text-slate-400 border-slate-200 bg-slate-50" };
+        if (day.dateState.isFuture) return { text: "Status: Not Planned", color: "text-amber-500 border-amber-100 bg-amber-50" };
+        // Default to Today
+        return { text: "Ready for your day?", color: "text-slate-500 border-slate-200 bg-white" };
+    }
+
     if (day.dayStatus === 'completed') return { text: "Day Completed", color: "text-slate-500 border-slate-200 bg-slate-50" };
+    
+    // 2. Active Day Logic
     if (engine.scheduleTasks.length === 0) return { text: "Status: Not Planned", color: "text-amber-500 border-amber-100 bg-amber-50" };
 
-    // 2. Calculate "Now" in Shifted Minutes (e.g., 01:00 AM = 1500)
+    // 3. Time Logic
     const now = getNow();
     const nowStr = now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: false });
     const nowMins = getAdjustedMinutes(nowStr);
@@ -57,7 +65,6 @@ export function useDashboard() {
     let nextTask: TaskItem | null = null;
     let minDiff = Infinity;
 
-    // 3. Loop through Scheduled Tasks
     const timedTasks = engine.scheduleTasks.filter(t => t.timeRange.includes('-'));
 
     for (const task of timedTasks) {
@@ -67,14 +74,11 @@ export function useDashboard() {
       const startMins = getAdjustedMinutes(startStr);
       const endMins = getAdjustedMinutes(endStr);
 
-      // A. Check if "Current" (Now is inside the range)
       if (nowMins >= startMins && nowMins < endMins) {
         currentTask = task;
-        break; // Priority: If we are doing something, show that.
+        break;
       }
 
-      // B. Check if "Next" (Start is in the future AND task is not done)
-      // Note: We check task.status !== 'completed' so we don't suggest done tasks
       if (nowMins < startMins && task.status !== 'completed') {
         const diff = startMins - nowMins;
         if (diff < minDiff) {
@@ -84,7 +88,6 @@ export function useDashboard() {
       }
     }
 
-    // 4. Return Result
     if (currentTask) {
         return { text: `Now: ${currentTask.title}`, color: "text-emerald-600 border-emerald-200 bg-white" };
     }
@@ -95,13 +98,12 @@ export function useDashboard() {
        let timeStr = ""; 
        if (hrs > 0) timeStr += `${hrs}h `; 
        if (mins > 0 || hrs === 0) timeStr += `${mins}m`;
-       
        return { text: `Next: ${nextTask.title} in ${timeStr.trim()}`, color: "text-indigo-500 border-indigo-100 bg-white" };
     }
 
     return { text: "No pending tasks", color: "text-slate-400 border-slate-200 bg-slate-50" };
 
-  }, [day.dayStatus, engine.scheduleTasks]); // Re-calc only when status or list changes
+  }, [day.dayStatus, day.dateState, engine.scheduleTasks]);
 
   // --- MODAL HELPERS ---
   const openAddSchedule = (index: number) => {
