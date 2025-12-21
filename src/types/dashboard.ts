@@ -21,8 +21,18 @@ export interface TimerEvent {
   timestamp: number; // Unix timestamp
 }
 
-export interface DayLog {
-  date: string;
-  originalSchedule: TaskItem[]; // Snapshot taken at "Start Day"
-  events: TimerEvent[];
+// Deprecated: Not used by any other code
+// export interface DayLog {
+//   date: string;
+//   originalSchedule: TaskItem[]; // Snapshot taken at "Start Day"
+//   events: TimerEvent[];
+// }
+
+export interface DayData {
+  status: 'sleeping' | 'active' | 'completed';
+  checkInTime: Date | null;
+  completedAt: Date | null;
+  // --- NEW FIELDS ---
+  plannedCheckIn: string;
+  plannedSleep: string;
 }

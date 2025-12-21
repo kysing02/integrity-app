@@ -1,138 +1,132 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { TaskItem, TimerEvent } from '@/types/dashboard';
 import { parseDurationToSeconds, getAdjustedMinutes, getNow } from '@/lib/timeUtils';
 import * as api from '@/lib/dashboardService';
+import { generateUUID } from '@/lib/utils';
 
-export function useTaskEngine(initialData: any, dayStatus: string) {
+export function useTaskEngine(initialData: any, dayStatus: string, isFuture: boolean) {
   const [scheduleTasks, setScheduleTasks] = useState<TaskItem[]>([]);
   const [dailyActions, setDailyActions] = useState<TaskItem[]>([]);
   const [timerEvents, setTimerEvents] = useState<TimerEvent[]>([]);
   
   const [globalActiveTask, setGlobalActiveTask] = useState<TaskItem | null>(null);
-  
-  const [flexCapacitySeconds, setFlexCapacitySeconds] = useState(0);
   const [workLeftSeconds, setWorkLeftSeconds] = useState(0);
 
-  // --- 1. SYNC WITH DB LOAD (With Smart Merge) ---
+  // --- 1. SYNC WITH DB LOAD ---
   useEffect(() => {
     if (initialData) {
-      // A. Prepare raw lists from DB
-      let newSchedule = initialData.scheduleTasks || [];
-      let newDaily = initialData.dailyActions || [];
-      
+      setScheduleTasks(initialData.scheduleTasks || []);
+      setDailyActions(initialData.dailyActions || []);
       setTimerEvents(initialData.timerEvents || []);
 
-      // B. SMART MERGE: 
-      // If we have a running Global Task, we must OVERRIDE the DB data for that specific task.
-      // This prevents the UI from flickering to "Pending" or jumping back in time.
-      if (globalActiveTask) {
-         // Sync Schedule List
-         newSchedule = newSchedule.map((t: TaskItem) => 
-            t.id === globalActiveTask.id 
-              ? { ...t, ...globalActiveTask, status: 'in_progress' } // Force Active State
-              : t
-         );
-
-         // Sync Daily List
-         newDaily = newDaily.map((t: TaskItem) => 
-            t.id === globalActiveTask.id 
-              ? { ...t, ...globalActiveTask, status: 'in_progress' } 
-              : t
-         );
-      } else {
-         // If no global task is running locally, check if the DB thinks one is running
-         // (This handles fresh page reloads)
-         const localActive = 
-            newSchedule.find((t: any) => t.status === 'in_progress') || 
-            newDaily.find((t: any) => t.status === 'in_progress');
-         
-         if (localActive) {
-            setGlobalActiveTask(localActive);
-         }
-      }
-
-      setScheduleTasks(newSchedule);
-      setDailyActions(newDaily);
+      // Check if DB thinks something is running (for fresh loads)
+      const dbActive = 
+         (initialData.scheduleTasks || []).find((t: any) => t.status === 'in_progress') || 
+         (initialData.dailyActions || []).find((t: any) => t.status === 'in_progress');
       
-    } else {
-      setScheduleTasks([]);
-      setDailyActions([]);
-      setTimerEvents([]);
+      if (dbActive) {
+         setGlobalActiveTask(dbActive);
+      }
     }
-  }, [initialData]); // We exclude globalActiveTask to avoid infinite loops, handled by logic above
+  }, [initialData]);
 
   // --- 2. INITIAL FETCH (Persistence) ---
   useEffect(() => {
+    let isMounted = true;
     api.apiGetGlobalActiveTask().then(task => {
-      if (task) setGlobalActiveTask(task);
+      if (isMounted && task) {
+         setGlobalActiveTask(task);
+      }
     });
+    return () => { isMounted = false; };
   }, []);
+
+  // --- 3. REACTIVE SMART MERGE (The "Anti-Idle" Fix) ---
+  // Whenever globalActiveTask updates (loaded from DB or ticked), 
+  // ensure the UI list reflects this immediately.
+  useEffect(() => {
+    if (globalActiveTask) {
+        const syncer = (list: TaskItem[]) => list.map(t => 
+            t.id === globalActiveTask.id 
+                ? { ...t, elapsedSeconds: globalActiveTask.elapsedSeconds, status: 'in_progress' as const }
+                : t
+        );
+        setScheduleTasks(prev => syncer(prev));
+        setDailyActions(prev => syncer(prev));
+    }
+  }, [globalActiveTask?.id, globalActiveTask?.elapsedSeconds]); 
+  // Note: We depend on seconds here to keep UI in sync, 
+  // but this is cheap because it doesn't restart the timer interval below.
 
   // Derived Stats
   const totalVolumeSeconds = 
     scheduleTasks.reduce((acc, t) => acc + parseDurationToSeconds(t.timeRange), 0) + 
     dailyActions.reduce((acc, t) => acc + parseDurationToSeconds(t.timeRange), 0);
 
-  // --- 3. TIMER ENGINE ---
+  // --- 4. TIMER ENGINE (The Stable Heartbeat) ---
   useEffect(() => {
+    // Only run if we have an active task OR if we need to update capacity (active day)
+    if (!globalActiveTask && dayStatus !== 'active') return;
+
     const interval = setInterval(() => {
       const now = getNow();
       
       // A. Tick Global Task
       if (globalActiveTask) {
-        // 1. Tick the Global Ghost
-        const updatedGlobal = { ...globalActiveTask, elapsedSeconds: globalActiveTask.elapsedSeconds + 1 };
-        setGlobalActiveTask(updatedGlobal);
-
-        // 2. Tick the UI List (Force Status 'in_progress')
-        const updater = (list: TaskItem[]) => list.map(t => 
-          t.id === globalActiveTask.id 
-             ? { ...t, elapsedSeconds: updatedGlobal.elapsedSeconds, status: 'in_progress' } // <--- FIX HERE
-             : t
-        );
-        
-        if (globalActiveTask.isDaily) setDailyActions(prev => updater(prev));
-        else setScheduleTasks(prev => updater(prev));
+        // We only update the Global State here.
+        // The "Reactive Smart Merge" effect above will catch this change 
+        // and update scheduleTasks/dailyActions automatically.
+        setGlobalActiveTask(prev => prev ? { ...prev, elapsedSeconds: prev.elapsedSeconds + 1 } : null);
       }
 
-      // B. Recalculate Capacity
+      // B. Recalculate Work Left
+      // We use functional updates to read the LATEST lists without adding them to dependency array
       if (dayStatus === 'active') {
-          const currentStr = now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: false });
-          const currentMins = getAdjustedMinutes(currentStr);
-          const targetEndMins = getAdjustedMinutes("23:00"); 
-          const totalWindowSeconds = (targetEndMins - currentMins) * 60;
-             
-          const calcRemaining = (t: TaskItem) => {
-             const total = parseDurationToSeconds(t.timeRange);
-             if (t.status === 'completed') return 0;
-             return Math.max(0, total - t.elapsedSeconds);
-          };
+          setScheduleTasks(currentSchedule => {
+             setDailyActions(currentDaily => {
+                 const calcRemaining = (t: TaskItem) => {
+                    const total = parseDurationToSeconds(t.timeRange);
+                    if (t.status === 'completed') return 0;
+                    // Important: Use the live elapsed time if it's the active task
+                    const elapsed = (globalActiveTask && t.id === globalActiveTask.id) 
+                        ? globalActiveTask.elapsedSeconds 
+                        : t.elapsedSeconds;
+                    return Math.max(0, total - elapsed);
+                 };
 
-          const totalWorkLeft = 
-            scheduleTasks.reduce((acc, t) => acc + calcRemaining(t), 0) + 
-            dailyActions.reduce((acc, t) => acc + calcRemaining(t), 0);
-          
-          setWorkLeftSeconds(totalWorkLeft);
-          setFlexCapacitySeconds(totalWindowSeconds - totalWorkLeft);
+                 const totalWorkLeft = 
+                   currentSchedule.reduce((acc, t) => acc + calcRemaining(t), 0) + 
+                   currentDaily.reduce((acc, t) => acc + calcRemaining(t), 0);
+                 
+                 setWorkLeftSeconds(totalWorkLeft);
+                 return currentDaily; // No change to state, just reading
+             });
+             return currentSchedule; // No change to state
+          });
       }
     }, 1000);
+
     return () => clearInterval(interval);
-  }, [globalActiveTask, dayStatus, scheduleTasks, dailyActions]);
+  }, [dayStatus, globalActiveTask?.id]); 
+  // ^ CRITICAL: dependency array is minimal. 
+  // We do NOT include scheduleTasks/dailyActions/elapsedSeconds here. 
+  // This prevents the interval from resetting every second.
 
-  // --- 4. ACTIONS ---
+  // --- 5. ACTIONS ---
 
-const toggleTask = async (id: string, isDaily: boolean) => {
-    // A. STOP LOGIC (If something is running)
+  const toggleTask = async (id: string, isDaily: boolean) => {
+    if (isFuture) {
+        console.warn("Cannot start timer in future");
+        return; 
+    }
+
+    // A. STOP LOGIC
     if (globalActiveTask) {
-       // 1. Stop in DB (Using new Robust Helper)
-       // We pass the CURRENT elapsedSeconds from our local state, which is accurate
        await api.apiStopTask(globalActiveTask.id, globalActiveTask.elapsedSeconds);
 
-       // 2. Clear Global State
        const stoppingId = globalActiveTask.id;
-       setGlobalActiveTask(null);
+       setGlobalActiveTask(null); // This stops the interval tick
 
-       // 3. Update Local UI
        const stopFn = (list: TaskItem[]) => list.map(t => t.id === stoppingId ? { ...t, status: 'pending' as const } : t);
        if (globalActiveTask.isDaily) setDailyActions(stopFn);
        else setScheduleTasks(stopFn);
@@ -145,22 +139,21 @@ const toggleTask = async (id: string, isDaily: boolean) => {
     const target = targetList.find(t => t.id === id);
     
     if (target) {
-       // 1. Set Global State
+       // Optimistic Update
        const startedTask = { ...target, status: 'in_progress' as const };
-       setGlobalActiveTask(startedTask);
+       setGlobalActiveTask(startedTask); // This starts the interval tick
 
-       // 2. Update Local UI
-       const startFn = (list: TaskItem[]) => list.map(t => t.id === id ? { ...t, status: 'in_progress' as const } : t);
-       if (isDaily) setDailyActions(startFn);
-       else setScheduleTasks(startFn);
-
-       // 3. Start in DB (Using new Robust Helper)
+       // DB Update
        await api.apiStartTask(id);
     }
   };
 
   const toggleComplete = async (id: string, isDaily: boolean) => {
-    const toggler = (list: TaskItem[]) => list.map(t => t.id === id ? { ...t, status: t.status === 'completed' ? 'pending' : 'completed' } as TaskItem : t);
+    const toggler = (list: TaskItem[]) => list.map(t => {
+        if (t.id !== id) return t;
+        const newStatus = t.status === 'completed' ? 'pending' : 'completed';
+        return { ...t, status: newStatus as 'completed' | 'pending' };
+    });
     
     if (isDaily) setDailyActions(prev => toggler(prev)); 
     else setScheduleTasks(prev => toggler(prev));
@@ -184,14 +177,14 @@ const toggleTask = async (id: string, isDaily: boolean) => {
       category: taskData.category || 'CONSISTENCY',
       timeRange: taskData.timeRange || "",
       isDaily: isDaily,
-      status: (modalConfig.initialData?.status || 'pending') as any,
+      status: (modalConfig.initialData?.status || 'pending') as 'pending' | 'in_progress' | 'completed',
       elapsedSeconds: modalConfig.initialData?.elapsedSeconds || 0,
     };
 
     if (isNew) {
       const newTask: TaskItem = {
         ...baseTask,
-        id: crypto.randomUUID(),
+        id: generateUUID(),
         user_id: 'guest',
         day_id: 'temp',
         created_at: new Date().toISOString()
@@ -215,7 +208,7 @@ const toggleTask = async (id: string, isDaily: boolean) => {
     } else {
       const taskId = modalConfig.initialData!.id!;
       
-      // If we are updating the CURRENTLY RUNNING task, we must update the Global State too
+      // Update Global State if editing active task
       if (globalActiveTask && globalActiveTask.id === taskId) {
           setGlobalActiveTask(prev => prev ? { ...prev, ...baseTask } : null);
       }
@@ -243,7 +236,6 @@ const toggleTask = async (id: string, isDaily: boolean) => {
   };
 
   const deleteTask = async (id: string, isDaily: boolean) => {
-    // If deleting the active task, clear global state
     if (globalActiveTask && globalActiveTask.id === id) {
         setGlobalActiveTask(null);
     }
@@ -258,7 +250,7 @@ const toggleTask = async (id: string, isDaily: boolean) => {
 
   return {
     scheduleTasks, dailyActions, timerEvents, activeTask: globalActiveTask,
-    flexCapacitySeconds, workLeftSeconds, totalVolumeSeconds,
+    workLeftSeconds, totalVolumeSeconds,
     setScheduleTasks, setDailyActions, setTimerEvents,
     toggleTask, toggleComplete, saveTask, deleteTask
   };

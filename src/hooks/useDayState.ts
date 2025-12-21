@@ -18,6 +18,8 @@ export function useDayState() {
   const [completedAt, setCompletedAt] = useState<Date | null>(null);
   const [initialData, setInitialData] = useState<any>(null);
   const [isLoading, setIsLoading] = useState(true);
+  const [plannedCheckIn, setPlannedCheckIn] = useState("07:00");
+  const [plannedSleep, setPlannedSleep] = useState("23:00");
 
   // --- BOUNDARY WATCHER (THE FIX) ---
   // Checks every minute if we crossed 5AM. 
@@ -92,10 +94,14 @@ export function useDayState() {
         setCheckInTime(data.checkInTime);
         setCompletedAt(data.completedAt);
         setInitialData(data); 
+        setPlannedCheckIn(data.plannedCheckIn);
+        setPlannedSleep(data.plannedSleep);
       } else {
         setDayStatus('sleeping');
         setCheckInTime(null);
         setCompletedAt(null);
+        setPlannedCheckIn("07:00");
+        setPlannedSleep("23:00");
       }
       
       setIsLoading(false);
@@ -104,7 +110,7 @@ export function useDayState() {
   }, [viewDate]);
 
   return {
-    viewDate, dayStatus, checkInTime, completedAt, initialData, dateState, isLoading,
-    setDayStatus, setCheckInTime, navigateDay, goToToday
+    viewDate, dayStatus, checkInTime, completedAt, initialData, dateState, isLoading, plannedCheckIn, plannedSleep,
+    setDayStatus, setCheckInTime, navigateDay, goToToday, setPlannedCheckIn, setPlannedSleep
   };
 }

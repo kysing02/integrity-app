@@ -130,7 +130,13 @@ const ViewActive = ({ state, actions, helpers, formatCheckInTime }: ViewActivePr
         </div>
 
         <div className="-mx-6 mb-4"> 
-          <FlexBucket totalVolumeSeconds={state.totalVolumeSeconds} flexCapacitySeconds={state.flexCapacitySeconds} workLeftSeconds={state.workLeftSeconds}/>
+          <FlexBucket 
+            totalVolumeSeconds={state.totalVolumeSeconds} 
+            workLeftSeconds={state.workLeftSeconds}
+            plannedSleep={state.plannedSleep}
+            plannedCheckIn={state.plannedCheckIn} // <--- Pass Config
+            isFuture={state.isFuture}             // <--- Pass Future Flag
+          />
         </div>
         
         <div className="grid grid-cols-4 gap-4">

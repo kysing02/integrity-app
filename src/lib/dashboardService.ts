@@ -76,6 +76,10 @@ export const fetchDayData = async (dateId: string) => {
     status: day.status,
     checkInTime: day.check_in_time ? new Date(day.check_in_time) : null,
     completedAt: day.completed_at ? new Date(day.completed_at) : null,
+    // --- READ CONFIG ---
+    plannedCheckIn: day?.planned_check_in || "07:00",
+    plannedSleep: day?.planned_sleep || "23:00",
+
     scheduleTasks: appTasks.filter(t => !t.isDaily),
     dailyActions: appTasks.filter(t => t.isDaily),
     timerEvents: (logs || []).map(l => ({
@@ -87,16 +91,31 @@ export const fetchDayData = async (dateId: string) => {
   };
 };
 
-export const apiStartDay = async (specificDateId?: string) => {
+export const apiUpdateDayConfig = async (dayId: string, plannedCheckIn: string, plannedSleep: string) => {
+    const userId = await getUserId();
+    await supabase.from('days').update({ 
+        planned_check_in: plannedCheckIn, 
+        planned_sleep: plannedSleep 
+    }).eq('id', dayId).eq('user_id', userId);
+};
+
+export const apiStartDay = async (specificDateId?: string, checkInTime?: string | null) => {
   const userId = await getUserId();
   const dateId = specificDateId || getTodayId(userId); 
 
-  await supabase.from('days').insert({
+  // Check if it already exists to be safe (idempotency)
+  const { error } = await supabase.from('days').insert({
     id: dateId,
     user_id: userId,
-    status: 'active',
-    check_in_time: new Date().toISOString()
+    status: 'active', // It is "Active" in the sense that you can edit it
+    check_in_time: checkInTime // Can be NULL if we are just planning
   });
+
+  if (error) {
+      // Optional: If it fails because it exists, we might want to just update it?
+      // For now, let's assume 'Start Planning' button is only shown when day doesn't exist.
+      console.error("Error starting day:", error);
+  }
 };
 
 export const apiEndDay = async (specificDayId?: string) => {

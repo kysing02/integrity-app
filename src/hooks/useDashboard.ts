@@ -11,8 +11,8 @@ export function useDashboard() {
   const day = useDayState();
   
   // 2. Load Engine (Dependent on Day Data)
-  const engine = useTaskEngine(day.initialData, day.dayStatus);
-
+  const engine = useTaskEngine(day.initialData, day.dayStatus, day.dateState.isFuture);
+  
   // 3. UI Local State
   const [modalConfig, setModalConfig] = useState<any>({ isOpen: false, mode: 'add', type: 'schedule' });
   const [isEditing, setIsEditing] = useState(false);
@@ -22,11 +22,20 @@ export function useDashboard() {
   // --- ACTIONS ---
   
   const startDay = async () => {
+    // 1. Update Local UI immediately
     day.setDayStatus('active');
-    day.setCheckInTime(getNow());
+    
+    // 2. Determine Context
+    const isPlanning = day.dateState.isFuture;
+    const timeToSet = isPlanning ? null : getNow(); // Null for Future, Now for Today
+    
+    day.setCheckInTime(timeToSet);
+
+    // 3. Update Database
     const userId = await api.getUserId();
     const dateId = getTodayId(userId, day.viewDate);
-    await api.apiStartDay(dateId);
+    
+    await api.apiStartDay(dateId, timeToSet ? timeToSet.toISOString() : null);
   };
 
   const endDay = () => setIsSummaryOpen(true);
@@ -153,6 +162,14 @@ export function useDashboard() {
 
   const handleSaveTask = (data: any) => engine.saveTask(data, modalConfig).then(closeModal);
 
+  const updateDayConfig = async (pCheckIn: string, pSleep: string) => {
+      day.setPlannedCheckIn(pCheckIn);
+      day.setPlannedSleep(pSleep);
+      const userId = await api.getUserId();
+      const dateId = getTodayId(userId, day.viewDate);
+      await api.apiUpdateDayConfig(dateId, pCheckIn, pSleep);
+  };
+
   return {
     state: {
       ...day,
@@ -165,6 +182,7 @@ export function useDashboard() {
     actions: {
       ...day, 
       ...engine,
+      updateDayConfig,
       startDay, endDay, confirmEndDay,
       setIsEditing, setIsEditingActions, setIsSummaryOpen,
       openAddSchedule, openAddDaily, openEditTask, closeModal,
