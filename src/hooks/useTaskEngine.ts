@@ -12,6 +12,11 @@ export function useTaskEngine(initialData: any, dayStatus: string, isFuture: boo
   const [globalActiveTask, setGlobalActiveTask] = useState<TaskItem | null>(null);
   const [workLeftSeconds, setWorkLeftSeconds] = useState(0);
 
+  // --- NEW: THE ANCHOR ---
+  // We use a ref to store the reference point. Refs don't trigger re-renders, 
+  // but they persist the "Anchor" data perfectly across interval ticks.
+  const anchorRef = useRef<{ id: string; startTime: number; initialElapsed: number } | null>(null);
+
   // --- 1. SYNC WITH DB LOAD ---
   useEffect(() => {
     if (initialData) {
@@ -19,13 +24,20 @@ export function useTaskEngine(initialData: any, dayStatus: string, isFuture: boo
       setDailyActions(initialData.dailyActions || []);
       setTimerEvents(initialData.timerEvents || []);
 
-      // Check if DB thinks something is running (for fresh loads)
       const dbActive = 
          (initialData.scheduleTasks || []).find((t: any) => t.status === 'in_progress') || 
          (initialData.dailyActions || []).find((t: any) => t.status === 'in_progress');
       
       if (dbActive) {
          setGlobalActiveTask(dbActive);
+         // Set Anchor on Load
+         if (!anchorRef.current || anchorRef.current.id !== dbActive.id) {
+             anchorRef.current = {
+                 id: dbActive.id,
+                 startTime: Date.now(),
+                 initialElapsed: dbActive.elapsedSeconds // This comes pre-calculated from your DB mapper
+             };
+         }
       }
     }
   }, [initialData]);
@@ -36,14 +48,18 @@ export function useTaskEngine(initialData: any, dayStatus: string, isFuture: boo
     api.apiGetGlobalActiveTask().then(task => {
       if (isMounted && task) {
          setGlobalActiveTask(task);
+         // Set Anchor on Initial Fetch
+         anchorRef.current = {
+             id: task.id,
+             startTime: Date.now(),
+             initialElapsed: task.elapsedSeconds
+         };
       }
     });
     return () => { isMounted = false; };
   }, []);
 
-  // --- 3. REACTIVE SMART MERGE (The "Anti-Idle" Fix) ---
-  // Whenever globalActiveTask updates (loaded from DB or ticked), 
-  // ensure the UI list reflects this immediately.
+  // --- 3. REACTIVE SMART MERGE ---
   useEffect(() => {
     if (globalActiveTask) {
         const syncer = (list: TaskItem[]) => list.map(t => 
@@ -55,42 +71,43 @@ export function useTaskEngine(initialData: any, dayStatus: string, isFuture: boo
         setDailyActions(prev => syncer(prev));
     }
   }, [globalActiveTask?.id, globalActiveTask?.elapsedSeconds]); 
-  // Note: We depend on seconds here to keep UI in sync, 
-  // but this is cheap because it doesn't restart the timer interval below.
 
   // Derived Stats
   const totalVolumeSeconds = 
     scheduleTasks.reduce((acc, t) => acc + parseDurationToSeconds(t.timeRange), 0) + 
     dailyActions.reduce((acc, t) => acc + parseDurationToSeconds(t.timeRange), 0);
 
-  // --- 4. TIMER ENGINE (The Stable Heartbeat) ---
+  // --- 4. TIMER ENGINE (Self-Correcting) ---
   useEffect(() => {
-    // Only run if we have an active task OR if we need to update capacity (active day)
     if (!globalActiveTask && dayStatus !== 'active') return;
 
     const interval = setInterval(() => {
-      const now = getNow();
-      
-      // A. Tick Global Task
-      if (globalActiveTask) {
-        // We only update the Global State here.
-        // The "Reactive Smart Merge" effect above will catch this change 
-        // and update scheduleTasks/dailyActions automatically.
-        setGlobalActiveTask(prev => prev ? { ...prev, elapsedSeconds: prev.elapsedSeconds + 1 } : null);
+      // A. Tick Global Task (Using Anchor Math)
+      if (globalActiveTask && anchorRef.current && anchorRef.current.id === globalActiveTask.id) {
+        const now = Date.now();
+        // The Magic Formula: (Now - AnchorStart) + StartValue
+        const diffSeconds = Math.floor((now - anchorRef.current.startTime) / 1000);
+        const correctElapsed = anchorRef.current.initialElapsed + diffSeconds;
+
+        // Only update if changed (prevents micro-jitter)
+        if (correctElapsed !== globalActiveTask.elapsedSeconds) {
+            setGlobalActiveTask(prev => prev ? { ...prev, elapsedSeconds: correctElapsed } : null);
+        }
       }
 
       // B. Recalculate Work Left
-      // We use functional updates to read the LATEST lists without adding them to dependency array
       if (dayStatus === 'active') {
           setScheduleTasks(currentSchedule => {
              setDailyActions(currentDaily => {
                  const calcRemaining = (t: TaskItem) => {
                     const total = parseDurationToSeconds(t.timeRange);
                     if (t.status === 'completed') return 0;
-                    // Important: Use the live elapsed time if it's the active task
+                    
+                    // Use live value for active task, stored value for others
                     const elapsed = (globalActiveTask && t.id === globalActiveTask.id) 
                         ? globalActiveTask.elapsedSeconds 
                         : t.elapsedSeconds;
+                        
                     return Math.max(0, total - elapsed);
                  };
 
@@ -99,18 +116,15 @@ export function useTaskEngine(initialData: any, dayStatus: string, isFuture: boo
                    currentDaily.reduce((acc, t) => acc + calcRemaining(t), 0);
                  
                  setWorkLeftSeconds(totalWorkLeft);
-                 return currentDaily; // No change to state, just reading
+                 return currentDaily;
              });
-             return currentSchedule; // No change to state
+             return currentSchedule;
           });
       }
     }, 1000);
 
     return () => clearInterval(interval);
   }, [dayStatus, globalActiveTask?.id]); 
-  // ^ CRITICAL: dependency array is minimal. 
-  // We do NOT include scheduleTasks/dailyActions/elapsedSeconds here. 
-  // This prevents the interval from resetting every second.
 
   // --- 5. ACTIONS ---
 
@@ -125,7 +139,8 @@ export function useTaskEngine(initialData: any, dayStatus: string, isFuture: boo
        await api.apiStopTask(globalActiveTask.id, globalActiveTask.elapsedSeconds);
 
        const stoppingId = globalActiveTask.id;
-       setGlobalActiveTask(null); // This stops the interval tick
+       setGlobalActiveTask(null);
+       anchorRef.current = null; // Clear Anchor
 
        const stopFn = (list: TaskItem[]) => list.map(t => t.id === stoppingId ? { ...t, status: 'pending' as const } : t);
        if (globalActiveTask.isDaily) setDailyActions(stopFn);
@@ -139,14 +154,25 @@ export function useTaskEngine(initialData: any, dayStatus: string, isFuture: boo
     const target = targetList.find(t => t.id === id);
     
     if (target) {
-       // Optimistic Update
        const startedTask = { ...target, status: 'in_progress' as const };
-       setGlobalActiveTask(startedTask); // This starts the interval tick
+       setGlobalActiveTask(startedTask);
+       
+       // Set New Anchor
+       anchorRef.current = {
+           id: target.id,
+           startTime: Date.now(),
+           initialElapsed: target.elapsedSeconds
+       };
 
        // DB Update
        await api.apiStartTask(id);
     }
   };
+
+  // ... (toggleComplete, saveTask, deleteTask remain the same) ...
+  // Be sure to include the logic: 
+  // if (globalActiveTask && globalActiveTask.id === id) setGlobalActiveTask(null); 
+  // inside deleteTask to be safe.
 
   const toggleComplete = async (id: string, isDaily: boolean) => {
     const toggler = (list: TaskItem[]) => list.map(t => {
@@ -211,6 +237,8 @@ export function useTaskEngine(initialData: any, dayStatus: string, isFuture: boo
       // Update Global State if editing active task
       if (globalActiveTask && globalActiveTask.id === taskId) {
           setGlobalActiveTask(prev => prev ? { ...prev, ...baseTask } : null);
+          // If we edited the active task, we might need to reset the anchor if we messed with elapsed time
+          // But usually editing title/category is fine.
       }
 
       const updateFn = (prev: TaskItem[]) => {
@@ -238,6 +266,7 @@ export function useTaskEngine(initialData: any, dayStatus: string, isFuture: boo
   const deleteTask = async (id: string, isDaily: boolean) => {
     if (globalActiveTask && globalActiveTask.id === id) {
         setGlobalActiveTask(null);
+        anchorRef.current = null;
     }
 
     if (isDaily) {
