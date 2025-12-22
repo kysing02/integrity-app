@@ -35,7 +35,10 @@ const TimelineRibbon = ({
   };
 
   useEffect(() => {
-    if (!showCurrentTime) return;
+    if (!showCurrentTime) {
+      setPercentagePos(0);
+      return;
+    }
 
     const updatePosition = () => {
       let now = new Date();

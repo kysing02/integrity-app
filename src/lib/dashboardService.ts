@@ -102,35 +102,49 @@ export const apiUpdateDayConfig = async (dayId: string, plannedCheckIn: string, 
 export const apiStartDay = async (specificDateId?: string, checkInTime?: string | null) => {
   const userId = await getUserId();
   const dateId = specificDateId || getTodayId(userId); 
+  
+  // UPSERT LOGIC:
+  // 1. Try to selecting the day first
+  const { data: existing } = await supabase.from('days').select('id').eq('id', dateId).maybeSingle();
 
-  // Check if it already exists to be safe (idempotency)
-  const { error } = await supabase.from('days').insert({
-    id: dateId,
-    user_id: userId,
-    status: 'active', // It is "Active" in the sense that you can edit it
-    check_in_time: checkInTime // Can be NULL if we are just planning
-  });
+  if (existing) {
+    // A. If it exists (e.g. was planned), just UPDATE the status/time
+    // Only update check_in_time if we are actually checking in (not null)
+    const updates: any = { status: 'active' };
+    if (checkInTime) {
+        updates.check_in_time = checkInTime;
+    }
+    await supabase.from('days').update(updates).eq('id', dateId);
 
-  if (error) {
-      // Optional: If it fails because it exists, we might want to just update it?
-      // For now, let's assume 'Start Planning' button is only shown when day doesn't exist.
-      console.error("Error starting day:", error);
+  } else {
+    // B. If new, INSERT it
+    await supabase.from('days').insert({
+      id: dateId,
+      user_id: userId,
+      status: 'active',
+      check_in_time: checkInTime
+    });
   }
 };
 
-export const apiEndDay = async (specificDayId?: string) => {
+export const apiEndDay = async (specificDayId?: string, overrideCompletedAt?: string) => {
   const userId = await getUserId();
   
-  if (specificDayId) {
+  // Extra Safety: Ensure we don't pass an Event object as an ID
+  const dayId = typeof specificDayId === 'string' ? specificDayId : undefined;
+  const timestamp = typeof overrideCompletedAt === 'string' ? overrideCompletedAt : new Date().toISOString();
+
+  if (dayId) {
       await supabase
         .from('days')
-        .update({ status: 'completed', completed_at: new Date().toISOString() })
-        .eq('id', specificDayId)
+        .update({ status: 'completed', completed_at: timestamp })
+        .eq('id', dayId)
         .eq('user_id', userId);
   } else {
+      // Fallback: Close whatever is active
       await supabase
         .from('days')
-        .update({ status: 'completed', completed_at: new Date().toISOString() })
+        .update({ status: 'completed', completed_at: timestamp })
         .eq('status', 'active')
         .eq('user_id', userId);
   }
@@ -172,11 +186,11 @@ export const apiStopTask = async (taskId: string, totalSeconds: number) => {
 };
 
 
-export const apiCreateTask = async (task: TaskItem) => {
+export const apiCreateTask = async (task: TaskItem, specificDayId?: string) => {
   const userId = await getUserId();
-  // Be careful: if editing a future/past day, we should probably pass the dayId in.
-  // For now, this assumes "Today", but we might need to update this signature later.
-  const dateId = getTodayId(userId); 
+  
+  // Use the passed dayId if available, fallback to today's calculation
+  const dateId = specificDayId || getTodayId(userId); 
   
   // Convert Component -> String
   const iconName = getIconName(task.icon);

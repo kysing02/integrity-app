@@ -9,6 +9,7 @@ import DashboardNavbar from '@/components/dashboard/DashboardNavbar';
 import DashboardHeader from '@/components/dashboard/DashboardHeader';
 import TaskEditorModal from '@/components/dashboard/TaskEditorModal';
 import DaySummaryModal from '@/components/dashboard/DaySummaryModal';
+import DaySettingsModal from '@/components/dashboard/DaySettingsModal';
 import LoadingSkeleton from '@/components/dashboard/LoadingSkeleton';
 
 // --- NEW VIEWS (The Split) ---
@@ -18,12 +19,14 @@ import ViewCompleted from '@/components/dashboard/views/ViewCompleted';
 
 // --- HOOK ---
 import { useDashboard } from '@/hooks/useDashboard';
+import { useState } from 'react';
 
 export default function Dashboard() {
   const { state, actions, helpers } = useDashboard();
   
   // 1. REF FOR SCROLL CONTAINER
   const scrollRef = useRef<HTMLDivElement>(null);
+  const [isSettingsOpen, setIsSettingsOpen] = useState(false);
 
   // 2. EFFECT: SCROLL TO TOP ON DATE CHANGE
   useEffect(() => {
@@ -61,6 +64,8 @@ export default function Dashboard() {
         existingTasks={state.scheduleTasks}
         minTime={state.modalConfig.minTime}
         maxTime={state.modalConfig.maxTime}
+        plannedCheckIn={state.plannedCheckIn}
+        plannedSleep={state.plannedSleep}
         onClose={actions.closeModal}
         onSave={actions.saveTask}
         onDelete={() => {
@@ -70,14 +75,24 @@ export default function Dashboard() {
         }}
       />
       
+      <DaySettingsModal 
+        isOpen={isSettingsOpen}
+        onClose={() => setIsSettingsOpen(false)}
+        plannedCheckIn={state.plannedCheckIn}
+        plannedSleep={state.plannedSleep}
+        onSave={actions.updateDayConfig}
+        onEndDay={actions.endDay}
+        showEndDay={!state.isFuture}
+      />
+      
       <DaySummaryModal 
         isOpen={state.isSummaryOpen}
         onClose={() => actions.setIsSummaryOpen(false)}
-        onConfirmEnd={actions.confirmEndDay}
+        onConfirmEnd={() => actions.confirmEndDay()}
         events={state.timerEvents}
         tasks={[...state.scheduleTasks, ...state.dailyActions]}
         checkInTime={state.checkInTime}
-        currentDate={helpers.getNow()}
+        currentDate={state.viewDate}
       />
 
       {/* 3. SCROLLABLE CONTENT AREA - ATTACHED REF HERE */}
@@ -103,9 +118,10 @@ export default function Dashboard() {
                  {/* B. TIMELINE RIBBON */}
                  {state.dayStatus !== 'completed' && (
                    <TimelineRibbon 
-                     showCurrentTime={state.dayStatus === 'active'} 
                      tasks={state.scheduleTasks} 
-                     plannedCheckIn="07:00" plannedSleep="23:00"
+                     plannedCheckIn={state.plannedCheckIn} 
+                     plannedSleep={state.plannedSleep}
+                     showCurrentTime={state.isToday}
                    />
                  )}
 
@@ -129,6 +145,7 @@ export default function Dashboard() {
                          actions={actions} 
                          helpers={helpers} 
                          formatCheckInTime={formatCheckInTime} 
+                         onOpenSettings={() => setIsSettingsOpen(true)}
                       />
                    )}
 
@@ -145,7 +162,7 @@ export default function Dashboard() {
       </div> 
       
       {/* GLOBAL BOTTOM NAV */}
-      <DashboardNavbar activeTask={state.activeTask} />
+      <DashboardNavbar activeTask={state.activeTask || undefined} />
     </main>
   );
 }

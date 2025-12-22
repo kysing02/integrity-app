@@ -14,13 +14,16 @@ interface TaskEditorModalProps {
   existingTasks?: TaskItem[];
   minTime?: string;
   maxTime?: string;
+  plannedCheckIn?: string;
+  plannedSleep?: string;
   onClose: () => void;
   onSave: (data: Partial<TaskItem>) => void;
   onDelete?: () => void;
 }
 
 const TaskEditorModal = ({ 
-  isOpen, mode, type, initialData, existingTasks = [], minTime, maxTime, onClose, onSave, onDelete 
+  isOpen, mode, type, initialData, existingTasks = [], minTime, maxTime, 
+  plannedCheckIn, plannedSleep, onClose, onSave, onDelete 
 }: TaskEditorModalProps) => {
   const [title, setTitle] = useState("");
   const [category, setCategory] = useState<'EFFICIENCY' | 'CONSISTENCY'>('CONSISTENCY');
@@ -41,6 +44,14 @@ const TaskEditorModal = ({
     
     if (getAdjustedMinutes(startTime) >= getAdjustedMinutes(endTime)) {
         return "End time must be after start time";
+    }
+
+    // BOUNDARY CHECK: Warn if outside logical day boundaries
+    if (plannedCheckIn && getAdjustedMinutes(startTime) < getAdjustedMinutes(plannedCheckIn)) {
+        return `Starts before Wake up (${plannedCheckIn})`;
+    }
+    if (plannedSleep && getAdjustedMinutes(endTime) > getAdjustedMinutes(plannedSleep)) {
+        return `Ends after Sleep (${plannedSleep})`;
     }
 
     for (const task of existingTasks) {

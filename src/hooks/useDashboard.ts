@@ -7,13 +7,19 @@ import { getNow, isTimeInPastShifted, getAdjustedMinutes } from '@/lib/timeUtils
 import { TaskItem } from '@/types/dashboard';
 
 export function useDashboard() {
-  // 1. Load Core State
   const day = useDayState();
+  const [dayId, setDayId] = useState<string>('');
+
+  useEffect(() => {
+    const updateDayId = async () => {
+      const userId = await api.getUserId();
+      setDayId(getTodayId(userId, day.viewDate));
+    };
+    updateDayId();
+  }, [day.viewDate]);
+
+  const engine = useTaskEngine(day.initialData, day.dayStatus, day.dateState.isFuture, dayId);
   
-  // 2. Load Engine (Dependent on Day Data)
-  const engine = useTaskEngine(day.initialData, day.dayStatus, day.dateState.isFuture);
-  
-  // 3. UI Local State
   const [modalConfig, setModalConfig] = useState<any>({ isOpen: false, mode: 'add', type: 'schedule' });
   const [isEditing, setIsEditing] = useState(false);
   const [isEditingActions, setIsEditingActions] = useState(false);
@@ -22,16 +28,19 @@ export function useDashboard() {
   // --- ACTIONS ---
   
   const startDay = async () => {
-    // 1. Update Local UI immediately
+    // 1. Update Local UI
     day.setDayStatus('active');
     
     // 2. Determine Context
     const isPlanning = day.dateState.isFuture;
-    const timeToSet = isPlanning ? null : getNow(); // Null for Future, Now for Today
+    const timeToSet = isPlanning ? null : getNow(); 
     
-    day.setCheckInTime(timeToSet);
+    // Only update local checkInTime if we are actually setting a time
+    if (timeToSet) {
+        day.setCheckInTime(timeToSet);
+    }
 
-    // 3. Update Database
+    // 3. Update Database (Now safely handles Upsert)
     const userId = await api.getUserId();
     const dateId = getTodayId(userId, day.viewDate);
     
@@ -40,55 +49,69 @@ export function useDashboard() {
 
   const endDay = () => setIsSummaryOpen(true);
 
-  const confirmEndDay = async () => {
-     // 1. Stop Active Timer (DB + UI)
-     const currentActive = [...engine.scheduleTasks, ...engine.dailyActions].find(t => t.status === 'in_progress');
-     if (currentActive) {
-        // DB Updates
-        await api.apiLogTimer(currentActive.id, 'STOP');
-        await api.apiUpdateTaskProgress(currentActive.id, currentActive.elapsedSeconds);
-        await api.apiUpdateTaskStatus(currentActive.id, 'pending');
+  // UPDATED: Now accepts optional timestamp for Auto-Close
+  const confirmEndDay = async (autoCloseTimestamp?: string) => {
+      // 1. Stop Active Timer (DB + UI)
+      const currentActive = [...engine.scheduleTasks, ...engine.dailyActions].find(t => t.status === 'in_progress');
+      if (currentActive) {
+        await api.apiStopTask(currentActive.id, currentActive.elapsedSeconds);
         
-        // Optimistic UI Update (Stop the ticking immediately)
-        // We manually force the status to pending in the engine state to ensure the Receipt renders a stopped state
+        // Optimistic UI Update
         const stopFn = (list: TaskItem[]) => list.map(t => t.id === currentActive.id ? { ...t, status: 'pending' as const } : t);
         if (currentActive.isDaily) engine.setDailyActions(stopFn);
         else engine.setScheduleTasks(stopFn);
-     }
-     
-     // 2. Close Day
-     day.setDayStatus('completed');
-     setIsSummaryOpen(false);
+      }
+      
+      // 2. Close Day
+      day.setDayStatus('completed');
+      setIsSummaryOpen(false);
 
-     // Calculate the ID for the day we are VIEWING
-     const userId = await api.getUserId();
-     const dateId = getTodayId(userId, day.viewDate);
-     
-     await api.apiEndDay(dateId); // <--- PASS ID HERE
+      const userId = await api.getUserId();
+      const dateId = getTodayId(userId, day.viewDate);
+      
+      // PASS TIMESTAMP (Auto-Close 5AM or Manual NOW)
+      await api.apiEndDay(dateId, autoCloseTimestamp);
   };
 
-  // --- AUTO-CLOSE LOGIC (THE FIX) ---
+  // --- AUTO-CLOSE LOGIC ---
   useEffect(() => {
-    // Check if we are looking at a "Past" day that is still "Active"
-    // AND ensure data has finished loading so we don't accidentally close an empty state
+    // If viewing a Past Day that is Active -> Auto Close it with 05:00 AM timestamp
     if (!day.isLoading && day.dayStatus === 'active' && day.dateState.isPast) {
-       console.warn("Auto-closing past active day");
-       confirmEndDay();
+       console.log("Auto-closing past active day...");
+       
+       // Calculate 05:00 AM of the NEXT day relative to the viewed day
+       const nextDay5AM = new Date(day.viewDate);
+       nextDay5AM.setDate(nextDay5AM.getDate() + 1); // +1 Day
+       nextDay5AM.setHours(5, 0, 0, 0);             // 05:00 AM
+       
+       const autoTime = nextDay5AM.toISOString();
+       
+       confirmEndDay(autoTime);
     }
   }, [day.isLoading, day.dayStatus, day.dateState.isPast]);
 
-  // --- PILL LOGIC ---
+  // ... (Keep pillState, modal helpers, return logic exactly as provided in your prompt) ...
   const pillState = useMemo(() => {
+    // 1. SLEEPING STATE
     if (day.dayStatus === 'sleeping') {
         if (day.dateState.isPast) return { text: "No Record", color: "text-slate-400 border-slate-200 bg-slate-50" };
         if (day.dateState.isFuture) return { text: "Status: Not Planned", color: "text-amber-500 border-amber-100 bg-amber-50" };
         return { text: "Ready for your day?", color: "text-slate-500 border-slate-200 bg-white" };
     }
 
+    // 2. COMPLETED
     if (day.dayStatus === 'completed') return { text: "Day Completed", color: "text-slate-500 border-slate-200 bg-slate-50" };
     
+    // 3. EMPTY SCHEDULE
     if (engine.scheduleTasks.length === 0) return { text: "Status: Not Planned", color: "text-amber-500 border-amber-100 bg-amber-50" };
 
+    // --- FIX: FUTURE PLANNING MODE ---
+    // If we are in the future, do NOT calculate "Now" or "Next"
+    if (day.dateState.isFuture) {
+        return { text: "Planning Mode", color: "text-indigo-500 border-indigo-100 bg-indigo-50" };
+    }
+
+    // 4. ACTIVE EXECUTION (TODAY)
     const now = getNow();
     const nowStr = now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: false });
     const nowMins = getAdjustedMinutes(nowStr);
@@ -137,31 +160,25 @@ export function useDashboard() {
 
   }, [day.dayStatus, day.dateState, engine.scheduleTasks]);
 
-  // --- MODAL HELPERS ---
   const openAddSchedule = (index: number) => {
     const prevTask = index >= 0 ? engine.scheduleTasks[index] : null;
     const nextTask = engine.scheduleTasks[index + 1];
-
     let minTime = "07:00";
     if (prevTask) {
        const parts = prevTask.timeRange.split('-');
        if (parts[1]) minTime = parts[1].trim();
     }
-
     let maxTime = "23:00";
     if (nextTask) {
        const parts = nextTask.timeRange.split('-');
        if (parts[0]) maxTime = parts[0].trim();
     }
-
     setModalConfig({ isOpen: true, mode: 'add', type: 'schedule', insertIndex: index, minTime, maxTime }); 
   };
   const openAddDaily = () => setModalConfig({ isOpen: true, mode: 'add', type: 'daily' });
   const openEditTask = (task: any) => setModalConfig({ isOpen: true, mode: 'edit', type: task.isDaily ? 'daily' : 'schedule', initialData: task });
   const closeModal = () => setModalConfig((prev: any) => ({ ...prev, isOpen: false }));
-
   const handleSaveTask = (data: any) => engine.saveTask(data, modalConfig).then(closeModal);
-
   const updateDayConfig = async (pCheckIn: string, pSleep: string) => {
       day.setPlannedCheckIn(pCheckIn);
       day.setPlannedSleep(pSleep);
@@ -172,17 +189,12 @@ export function useDashboard() {
 
   return {
     state: {
-      ...day,
-      ...day.dateState,
-      ...engine, 
+      ...day, ...day.dateState, ...engine, 
       modalConfig, isEditing, isEditingActions, isSummaryOpen, pillState,
-      hasSchedule: engine.scheduleTasks.length > 0,
-      debugTime: null
+      hasSchedule: engine.scheduleTasks.length > 0, debugTime: null
     },
     actions: {
-      ...day, 
-      ...engine,
-      updateDayConfig,
+      ...day, ...engine, updateDayConfig,
       startDay, endDay, confirmEndDay,
       setIsEditing, setIsEditingActions, setIsSummaryOpen,
       openAddSchedule, openAddDaily, openEditTask, closeModal,

@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
-import { Plus, Edit3, Check, LogOut } from 'lucide-react';
+import { Plus, Edit3, Check, LogOut, Settings2 } from 'lucide-react';
 import { TaskItem } from '@/types/dashboard';
-import { parseDurationToSeconds } from '@/lib/timeUtils';
+import { parseDurationToSeconds, getAdjustedMinutes } from '@/lib/timeUtils';
 
 // Components
 import TimelineRibbon from '@/components/dashboard/TimelineRibbon';
@@ -15,9 +15,10 @@ interface ViewActiveProps {
   actions: any;
   helpers: any;
   formatCheckInTime: (d: Date | null) => string;
+  onOpenSettings: () => void;
 }
 
-const ViewActive = ({ state, actions, helpers, formatCheckInTime }: ViewActiveProps) => {
+const ViewActive = ({ state, actions, helpers, formatCheckInTime, onOpenSettings }: ViewActiveProps) => {
   // Local Drag State
   const [draggedItemIndex, setDraggedItemIndex] = useState<number | null>(null);
   const handleDragStart = (index: number) => setDraggedItemIndex(index);
@@ -27,12 +28,29 @@ const ViewActive = ({ state, actions, helpers, formatCheckInTime }: ViewActivePr
   // --- LOGIC: Check if we have tasks ---
   const hasTasks = state.scheduleTasks.length > 0;
 
+  // --- LOGIC: Boundary Clashes ---
+  const boundaryClashes = state.scheduleTasks.some((t: TaskItem) => {
+    if (!t.timeRange.includes(' - ')) return false;
+    const [start, end] = t.timeRange.split(' - ');
+    return getAdjustedMinutes(start.trim()) < getAdjustedMinutes(state.plannedCheckIn) ||
+           getAdjustedMinutes(end.trim()) > getAdjustedMinutes(state.plannedSleep);
+  });
+
   return (
     <>
       <section className="mb-10 animate-in fade-in duration-500">
         <div className="flex justify-between items-end mb-6 border-b border-slate-100 pb-2">
-          <h2 className="text-xs font-bold text-slate-400 uppercase tracking-widest">Today's Timeline</h2>
-          {state.hasSchedule && !state.isEditing && (
+          <div className="flex flex-col gap-1">
+            <h2 className="text-xs font-bold text-slate-400 uppercase tracking-widest">
+              {state.isToday ? "Today's" : state.isFuture ? "Planned" : "Past"} Timeline
+            </h2>
+            {boundaryClashes && (
+              <span className="text-[10px] font-bold text-rose-500 flex items-center gap-1 animate-pulse">
+                <Settings2 size={10} /> Tasks outside day boundaries
+              </span>
+            )}
+          </div>
+          {!state.isEditing && (
             <button onClick={() => actions.setIsEditing(true)} disabled={state.isEditingActions} className={`flex items-center gap-1.5 text-[10px] font-bold px-3 py-1.5 rounded-full transition-colors ${state.isEditingActions ? 'text-slate-300' : 'text-indigo-600 bg-indigo-50 hover:bg-indigo-100'}`}>
               <Edit3 size={12} /><span>Edit Schedule</span>
             </button>
@@ -42,19 +60,26 @@ const ViewActive = ({ state, actions, helpers, formatCheckInTime }: ViewActivePr
 
         <div className="space-y-0">
           
-          {/* 1. Check-in Marker (HIDE IF NO TASKS) */}
-          {hasTasks && (() => {
+          {/* 1. Check-in Marker (ALWAYS SHOW) */}
+          {(() => {
               const firstTask = state.scheduleTasks[0];
               const parts = firstTask ? firstTask.timeRange.split('-') : [];
               const startTime = parts[0] ? parts[0].trim() : "";
               const isFirstStarted = firstTask ? helpers.isTimeInPast(startTime) : false;
-              const isGapless = startTime === "07:00";
+              const isGapless = startTime === state.plannedCheckIn;
               return (
                   <CheckInRow 
-                    timeStr={formatCheckInTime(state.checkInTime)}
+                    timeStr={state.checkInTime ? formatCheckInTime(state.checkInTime) : "--:--"}
                     isInsertionPointPast={isFirstStarted}
                     isGapless={isGapless}
                     onInsert={() => actions.openAddSchedule(-1)}
+                    
+                    // --- NEW PROPS ---
+                    isFuture={state.isFuture}
+                    hasCheckInTime={!!state.checkInTime}
+                    plannedCheckIn={state.plannedCheckIn}
+                    onCheckInNow={actions.startDay} // Re-use startDay to trigger the Check-In timestamp
+                    onPlanClick={state.isEditing ? onOpenSettings : undefined}
                   />
               );
           })()}
@@ -84,6 +109,7 @@ const ViewActive = ({ state, actions, helpers, formatCheckInTime }: ViewActivePr
                   progress={Math.min(progressPct, 100)} 
                   isLast={false} isEditing={state.isEditing} isLocked={isTaskLocked}
                   isInsertionPointPast={isInsertionBlocked} isGapless={isGapless}
+                  isFuture={state.isFuture}
                   onDelete={() => actions.deleteTask(task.id, false)} 
                   onInsert={() => actions.openAddSchedule(index)}
                   onEditClick={() => actions.openEditTask(task)}
@@ -104,15 +130,21 @@ const ViewActive = ({ state, actions, helpers, formatCheckInTime }: ViewActivePr
             </div>
           )}
 
-          {/* 4. End Day Button (HIDE IF NO TASKS) */}
-          {hasTasks && (
-            <div className="pt-4 flex flex-col items-center gap-2">
-                <span className="text-[10px] font-bold text-slate-300">23:00</span>
+          {/* 4. End Day Button (ALWAYS SHOW AS TARGET MARKER) */}
+          <div className="pt-4 flex flex-col items-center gap-2">
+              <span className="text-[10px] font-bold text-slate-300">{state.plannedSleep}</span>
+              {state.isFuture ? (
+                state.isEditing && (
+                  <button onClick={onOpenSettings} className="flex items-center gap-2 text-xs font-bold text-indigo-600 bg-indigo-50 px-6 py-3 rounded-2xl hover:bg-indigo-100 transition-all active:scale-95">
+                    <Settings2 size={16} /><span>Plan Sleep Time</span>
+                  </button>
+                )
+              ) : (
                 <button onClick={actions.endDay} className="flex items-center gap-2 text-xs font-bold text-slate-400 bg-slate-100 px-6 py-3 rounded-2xl hover:bg-slate-200 hover:text-slate-600 transition-all active:scale-95">
                   <LogOut size={16} /><span>Call it a day</span>
                 </button>
-            </div>
-          )}
+              )}
+          </div>
         </div>
       </section>
 

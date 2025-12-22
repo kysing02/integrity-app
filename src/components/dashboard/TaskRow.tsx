@@ -20,6 +20,9 @@ interface TaskRowProps {
   isInsertionPointPast?: boolean; 
   isGapless?: boolean;
   
+  // Logic Props
+  isFuture?: boolean;
+  
   // Read Only Props
   readOnly?: boolean;
   actualSeconds?: number;
@@ -35,6 +38,7 @@ const TaskRow = ({
   title, timeRange, progress, status, category = 'CONSISTENCY', isLast, icon: Icon,
   variant = 'task',
   isEditing, isLocked, isCurrentTimeSlot, isInsertionPointPast, isGapless,
+  isFuture,
   readOnly, actualSeconds = 0, hideBadge = false,
   onDelete, onInsert, onEditClick, onToggleComplete
 }: TaskRowProps) => {
@@ -224,6 +228,8 @@ const TaskRow = ({
                           <div className="w-8 h-8 rounded-full bg-white flex items-center justify-center shadow-sm"><div className="flex space-x-0.5"><span className="w-1 h-3 bg-indigo-600 animate-[bounce_1s_infinite_0ms] rounded-full"></span><span className="w-1 h-3 bg-indigo-600 animate-[bounce_1s_infinite_200ms] rounded-full"></span><span className="w-1 h-3 bg-indigo-600 animate-[bounce_1s_infinite_400ms] rounded-full"></span></div></div>
                         ) : status === 'completed' ? (
                           <div className="w-8 h-8 rounded-full bg-slate-100 text-slate-400 flex items-center justify-center"><CheckCircle2 size={16} /></div>
+                        ) : isFuture ? (
+                          <div className="w-8 h-8 rounded-full bg-slate-50 text-slate-200 flex items-center justify-center"><Play size={16} /></div>
                         ) : (
                           <button className="w-8 h-8 rounded-full bg-slate-50 text-slate-400 hover:bg-slate-100 hover:text-indigo-600 flex items-center justify-center transition-all opacity-0 group-hover:opacity-100"><Play size={16} /></button>
                         )}

@@ -9,9 +9,10 @@ interface DaySettingsModalProps {
   plannedSleep: string;
   onSave: (checkIn: string, sleep: string) => void;
   onEndDay: () => void;
+  showEndDay?: boolean;
 }
 
-const DaySettingsModal = ({ isOpen, onClose, plannedCheckIn, plannedSleep, onSave, onEndDay }: DaySettingsModalProps) => {
+const DaySettingsModal = ({ isOpen, onClose, plannedCheckIn, plannedSleep, onSave, onEndDay, showEndDay = true }: DaySettingsModalProps) => {
   const [checkIn, setCheckIn] = useState(plannedCheckIn);
   const [sleep, setSleep] = useState(plannedSleep);
 
@@ -71,12 +72,14 @@ const DaySettingsModal = ({ isOpen, onClose, plannedCheckIn, plannedSleep, onSav
            </button>
            
            {/* Secondary: End Day */}
-           <button 
-             onClick={onEndDay} 
-             className="w-full text-xs font-bold text-rose-400 py-3 hover:text-rose-600 flex items-center justify-center gap-1 opacity-60 hover:opacity-100 transition-opacity"
-           >
-              Complete Day <ArrowRight size={12} />
-           </button>
+           {showEndDay && (
+             <button 
+               onClick={onEndDay} 
+               className="w-full text-xs font-bold text-rose-400 py-3 hover:text-rose-600 flex items-center justify-center gap-1 opacity-60 hover:opacity-100 transition-opacity"
+             >
+                Complete Day <ArrowRight size={12} />
+             </button>
+           )}
         </div>
 
       </div>

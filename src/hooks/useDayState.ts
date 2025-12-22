@@ -6,7 +6,11 @@ export function useDayState() {
   // Helper to calculate Logical Today (5AM rule)
   const getLogicalToday = () => {
     const d = new Date();
-    if (d.getHours() < 5) d.setDate(d.getDate() - 1);
+    // Use Local Hours to determine if we are in the "Late Night" of the previous day
+    const hours = d.getHours();
+    if (hours < 5) {
+      d.setDate(d.getDate() - 1);
+    }
     d.setHours(0, 0, 0, 0);
     return d;
   };

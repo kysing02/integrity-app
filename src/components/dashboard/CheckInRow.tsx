@@ -1,25 +1,39 @@
 import React from 'react';
-import { Sun, Plus } from 'lucide-react';
+import { Sun, Plus, Play, CalendarClock } from 'lucide-react';
 
 interface CheckInRowProps {
   timeStr: string;
   isInsertionPointPast: boolean; // For the "Add Task" line styling
   isGapless: boolean;            // If the next task starts immediately
   onInsert: () => void;
+  
+  // --- NEW LOGIC PROPS ---
+  isFuture?: boolean;
+  hasCheckInTime?: boolean;
+  plannedCheckIn?: string;
+  onCheckInNow?: () => void;
+  onPlanClick?: () => void;
 }
 
-const CheckInRow = ({ timeStr, isInsertionPointPast, isGapless, onInsert }: CheckInRowProps) => {
+const CheckInRow = ({ 
+  timeStr, isInsertionPointPast, isGapless, onInsert,
+  isFuture = false, hasCheckInTime = true, plannedCheckIn = "07:00", onCheckInNow, onPlanClick 
+}: CheckInRowProps) => {
+
+  // Detect "Limbo State": It's today (not future), but we haven't officially checked in
+  const isLimbo = !isFuture && !hasCheckInTime;
+
   return (
-    <div className="group relative pl-4 pr-4 py-3 bg-white border-l-4 border-slate-300 rounded-r-xl shadow-sm mb-4">
+    <div className={`group relative pl-4 pr-4 py-3 bg-white border-l-4 ${isLimbo ? 'border-indigo-400' : 'border-slate-300'} rounded-r-xl shadow-sm mb-4`}>
       
-      {/* Connector Line Logic (Same as TaskRow) */}
+      {/* Connector Line Logic (PRESERVED) */}
       {!isGapless && (
         <div className={`absolute left-[-21px] bottom-[-24px] w-[2px] h-[24px] -z-10 
           ${isInsertionPointPast ? 'bg-slate-200' : 'bg-indigo-200 dashed-line'}`} 
         />
       )}
 
-      {/* Insert Button (Hover) */}
+      {/* Insert Button (Hover) (PRESERVED) */}
       {!isGapless && (
          <button 
            onClick={(e) => { e.stopPropagation(); onInsert(); }}
@@ -32,17 +46,37 @@ const CheckInRow = ({ timeStr, isInsertionPointPast, isGapless, onInsert }: Chec
 
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-3">
-          <div className="w-8 h-8 rounded-full bg-slate-100 flex items-center justify-center text-slate-400">
-             <Sun size={14} />
+          {/* Icon: Changes color if we are waiting to check in */}
+          <div className={`w-8 h-8 rounded-full flex items-center justify-center ${isLimbo ? 'bg-indigo-100 text-indigo-500' : 'bg-slate-100 text-slate-400'}`}>
+              {isFuture ? <CalendarClock size={14} /> : <Sun size={14} />}
           </div>
+          
           <div className="flex flex-col">
-            <span className="text-xs font-bold text-slate-700">Checked-in at {timeStr}</span>
+            {/* Text Logic */}
+            <span className={`text-xs font-bold ${isLimbo ? 'text-indigo-700' : 'text-slate-700'}`}>
+                {isFuture ? 'Planning Mode' : (isLimbo ? 'Ready to Start?' : `Checked-in at ${timeStr}`)}
+            </span>
             <span className="text-[10px] font-bold text-slate-400 mt-0.5">Start of Day</span>
           </div>
         </div>
-        <div className="text-[10px] font-bold text-slate-300 bg-slate-50 px-2 py-1 rounded-md">
-           07:00
-        </div>
+
+        {/* Right Side: Badge OR Action Button */}
+        {isLimbo ? (
+            <button 
+              onClick={onCheckInNow}
+              className="flex items-center gap-1.5 bg-indigo-600 hover:bg-indigo-700 text-white px-3 py-1.5 rounded-lg shadow-sm active:scale-95 transition-all"
+            >
+               <span className="text-[10px] font-bold uppercase tracking-wide">Check In</span>
+               <Play size={10} fill="currentColor" />
+            </button>
+        ) : (
+            <div 
+              onClick={onPlanClick}
+              className={`text-[10px] font-bold px-2 py-1 rounded-md transition-colors ${isFuture ? 'bg-indigo-50 text-indigo-600 cursor-pointer hover:bg-indigo-100' : 'text-slate-300 bg-slate-50'}`}
+            >
+               {plannedCheckIn}
+            </div>
+        )}
       </div>
     </div>
   );

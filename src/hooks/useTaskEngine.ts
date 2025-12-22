@@ -4,7 +4,7 @@ import { parseDurationToSeconds, getAdjustedMinutes, getNow } from '@/lib/timeUt
 import * as api from '@/lib/dashboardService';
 import { generateUUID } from '@/lib/utils';
 
-export function useTaskEngine(initialData: any, dayStatus: string, isFuture: boolean) {
+export function useTaskEngine(initialData: any, dayStatus: string, isFuture: boolean, dayId?: string) {
   const [scheduleTasks, setScheduleTasks] = useState<TaskItem[]>([]);
   const [dailyActions, setDailyActions] = useState<TaskItem[]>([]);
   const [timerEvents, setTimerEvents] = useState<TimerEvent[]>([]);
@@ -19,6 +19,13 @@ export function useTaskEngine(initialData: any, dayStatus: string, isFuture: boo
 
   // --- 1. SYNC WITH DB LOAD ---
   useEffect(() => {
+    // RESET LOCAL STATE when dayId changes to prevent stale data leaks
+    setScheduleTasks([]);
+    setDailyActions([]);
+    setTimerEvents([]);
+    setGlobalActiveTask(null);
+    anchorRef.current = null;
+
     if (initialData) {
       setScheduleTasks(initialData.scheduleTasks || []);
       setDailyActions(initialData.dailyActions || []);
@@ -40,7 +47,7 @@ export function useTaskEngine(initialData: any, dayStatus: string, isFuture: boo
          }
       }
     }
-  }, [initialData]);
+  }, [initialData, dayId]); // Added dayId to dependency array
 
   // --- 2. INITIAL FETCH (Persistence) ---
   useEffect(() => {
@@ -229,7 +236,7 @@ export function useTaskEngine(initialData: any, dayStatus: string, isFuture: boo
         });
       }
       
-      await api.apiCreateTask(newTask);
+      await api.apiCreateTask(newTask, dayId);
 
     } else {
       const taskId = modalConfig.initialData!.id!;
