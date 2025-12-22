@@ -5,9 +5,11 @@ import { parseDurationToSeconds } from '@/lib/timeUtils';
 
 interface DashboardNavbarProps {
   activeTask?: TaskItem;
+  currentTab: 'dashboard' | 'planner';
+  onTabChange: (tab: 'dashboard' | 'planner') => void;
 }
 
-const DashboardNavbar = ({ activeTask }: DashboardNavbarProps) => {
+const DashboardNavbar = ({ activeTask, currentTab, onTabChange }: DashboardNavbarProps) => {
   // --- ORB DATA CALCULATION ---
   const activeTotalSeconds = activeTask ? parseDurationToSeconds(activeTask.timeRange) : 0;
   const activeElapsed = activeTask ? activeTask.elapsedSeconds : 0;
@@ -32,11 +34,17 @@ const DashboardNavbar = ({ activeTask }: DashboardNavbarProps) => {
           
           {/* Left Group */}
           <div className="flex gap-5">
-            <button className="flex flex-col items-center gap-1 text-indigo-400 transition-colors">
+            <button 
+              onClick={() => onTabChange('dashboard')}
+              className={`flex flex-col items-center gap-1 transition-colors ${currentTab === 'dashboard' ? 'text-indigo-400' : 'hover:text-slate-200'}`}
+            >
               <Layout size={20} strokeWidth={2.5} />
               <span className="text-[9px] font-bold">Dashboard</span>
             </button>
-            <button className="flex flex-col items-center gap-1 hover:text-slate-200 transition-colors">
+            <button 
+              onClick={() => onTabChange('planner')}
+              className={`flex flex-col items-center gap-1 transition-colors ${currentTab === 'planner' ? 'text-indigo-400' : 'hover:text-slate-200'}`}
+            >
               <Calendar size={20} strokeWidth={2.5} />
               <span className="text-[9px] font-bold">Planner</span>
             </button>

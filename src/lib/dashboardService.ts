@@ -276,3 +276,34 @@ export const apiGetGlobalActiveTask = async (): Promise<TaskItem | null> => {
 
   return mapTaskFromDB(data);
 };
+
+// --- CALENDAR & ANALYTICS ---
+
+export const fetchCalendarData = async (startMonth: string, endMonth: string) => {
+  const userId = await getUserId();
+  
+  // 1. Fetch all days in range
+  const { data: days, error: daysError } = await supabase
+    .from('days')
+    .select('*')
+    .eq('user_id', userId)
+    .gte('id', startMonth)
+    .lte('id', endMonth);
+
+  if (daysError) console.error("Error fetching calendar days:", daysError);
+
+  // 2. Fetch all tasks in range to determine "Planning Health"
+  const { data: tasks, error: tasksError } = await supabase
+    .from('tasks')
+    .select('day_id, status, elapsed_seconds, time_range')
+    .eq('user_id', userId)
+    .gte('day_id', startMonth)
+    .lte('day_id', endMonth);
+
+  if (tasksError) console.error("Error fetching calendar tasks:", tasksError);
+
+  return {
+    days: days || [],
+    tasks: tasks || []
+  };
+};

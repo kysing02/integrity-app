@@ -115,6 +115,6 @@ export function useDayState() {
 
   return {
     viewDate, dayStatus, checkInTime, completedAt, initialData, dateState, isLoading, plannedCheckIn, plannedSleep,
-    setDayStatus, setCheckInTime, navigateDay, goToToday, setPlannedCheckIn, setPlannedSleep
+    setDayStatus, setCheckInTime, navigateDay, goToToday, setPlannedCheckIn, setPlannedSleep, setViewDate
   };
 }

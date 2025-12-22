@@ -13,6 +13,8 @@ interface DashboardHeaderProps {
   onPrevDay: () => void;
   onNextDay: () => void;
   onJumpToToday: () => void;
+  onPlannerClick?: () => void;
+  showDateBar?: boolean;
 }
 
 const DashboardHeader = ({ 
@@ -24,7 +26,9 @@ const DashboardHeader = ({
   viewDate,
   onPrevDay,
   onNextDay,
-  onJumpToToday
+  onJumpToToday,
+  onPlannerClick,
+  showDateBar = true
 }: DashboardHeaderProps) => {
 
   const isToday = (() => {
@@ -61,43 +65,45 @@ const DashboardHeader = ({
       </div>
 
       {/* 2. DATE NAVIGATION ROW (Slimmer) */}
-      <div className="flex items-center justify-between bg-white p-0.5 rounded-xl shadow-sm border border-slate-200">
-        
-        {/* Prev Arrow */}
-        <button 
-          onClick={onPrevDay} 
-          className="p-2 rounded-lg hover:bg-slate-50 text-slate-400 hover:text-slate-600 active:scale-95 transition-all"
-        >
-          <ChevronLeft size={18} strokeWidth={2.5} />
-        </button>
+      {showDateBar && (
+        <div className="flex items-center justify-between bg-white p-0.5 rounded-xl shadow-sm border border-slate-200">
+          
+          {/* Prev Arrow */}
+          <button 
+            onClick={onPrevDay} 
+            className="p-2 rounded-lg hover:bg-slate-50 text-slate-400 hover:text-slate-600 active:scale-95 transition-all"
+          >
+            <ChevronLeft size={18} strokeWidth={2.5} />
+          </button>
 
-        {/* Date Display */}
-        <div className="flex flex-col items-center cursor-default group relative">
-           
-           <span className="text-sm font-extrabold text-slate-700">
-             {viewDate.toLocaleDateString('en-GB', { weekday: 'short', day: 'numeric', month: 'short' })}
-           </span>
+          {/* Date Display */}
+          <div className="flex flex-col items-center cursor-default group relative">
+             
+             <span className="text-sm font-extrabold text-slate-700">
+               {viewDate.toLocaleDateString('en-GB', { weekday: 'short', day: 'numeric', month: 'short' })}
+             </span>
 
-           {/* Jump to Today */}
-           {!isToday && (
-             <button 
-               onClick={onJumpToToday}
-               className="absolute -right-8 top-1/2 -translate-y-1/2 p-1 text-indigo-500 hover:bg-indigo-50 rounded-full transition-all animate-in fade-in zoom-in-75 duration-300"
-               title="Jump to Today"
-             >
-               <RotateCcw size={12} strokeWidth={3} />
-             </button>
-           )}
+             {/* Jump to Today */}
+             {!isToday && (
+               <button 
+                 onClick={onJumpToToday}
+                 className="absolute -right-8 top-1/2 -translate-y-1/2 p-1 text-indigo-500 hover:bg-indigo-50 rounded-full transition-all animate-in fade-in zoom-in-75 duration-300"
+                 title="Jump to Today"
+               >
+                 <RotateCcw size={12} strokeWidth={3} />
+               </button>
+             )}
+          </div>
+
+          {/* Next Arrow */}
+          <button 
+            onClick={onNextDay} 
+            className="p-2 rounded-lg hover:bg-slate-50 text-slate-400 hover:text-slate-600 active:scale-95 transition-all"
+          >
+            <ChevronRight size={18} strokeWidth={2.5} />
+          </button>
         </div>
-
-        {/* Next Arrow */}
-        <button 
-          onClick={onNextDay} 
-          className="p-2 rounded-lg hover:bg-slate-50 text-slate-400 hover:text-slate-600 active:scale-95 transition-all"
-        >
-          <ChevronRight size={18} strokeWidth={2.5} />
-        </button>
-      </div>
+      )}
     </div>
   );
 };

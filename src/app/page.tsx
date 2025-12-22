@@ -16,6 +16,7 @@ import LoadingSkeleton from '@/components/dashboard/LoadingSkeleton';
 import ViewSleeping from '@/components/dashboard/views/ViewSleeping';
 import ViewActive from '@/components/dashboard/views/ViewActive';
 import ViewCompleted from '@/components/dashboard/views/ViewCompleted';
+import PlannerView from '@/components/dashboard/views/PlannerView';
 
 // --- HOOK ---
 import { useDashboard } from '@/hooks/useDashboard';
@@ -27,6 +28,7 @@ export default function Dashboard() {
   // 1. REF FOR SCROLL CONTAINER
   const scrollRef = useRef<HTMLDivElement>(null);
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
+  const [currentTab, setCurrentTab] = useState<'dashboard' | 'planner'>('dashboard');
 
   // 2. EFFECT: SCROLL TO TOP ON DATE CHANGE
   useEffect(() => {
@@ -53,6 +55,8 @@ export default function Dashboard() {
         onPrevDay={() => actions.navigateDay(-1)}
         onNextDay={() => actions.navigateDay(1)}
         onJumpToToday={actions.goToToday}
+        onPlannerClick={() => setCurrentTab('planner')}
+        showDateBar={currentTab === 'dashboard'}
       />
       
       {/* GLOBAL MODALS */}
@@ -95,7 +99,7 @@ export default function Dashboard() {
         currentDate={state.viewDate}
       />
 
-      {/* 3. SCROLLABLE CONTENT AREA - ATTACHED REF HERE */}
+      {/* 3. SCROLLABLE CONTENT AREA - ATTACH REF HERE */}
       <div 
         ref={scrollRef} // <--- ATTACH REF
         className="scroller flex-1 overflow-y-auto overflow-x-hidden no-scrollbar scroll-smooth"
@@ -105,6 +109,13 @@ export default function Dashboard() {
             {/* LOADING STATE */}
             {state.isLoading ? (
                <LoadingSkeleton />
+            ) : currentTab === 'planner' ? (
+              <div className="px-6 mt-6">
+                <PlannerView setViewDate={(d) => {
+                  actions.setViewDate(d);
+                  setCurrentTab('dashboard');
+                }} />
+              </div>
             ) : (
                <>
                  {/* A. STATUS PILL */}
@@ -162,7 +173,11 @@ export default function Dashboard() {
       </div> 
       
       {/* GLOBAL BOTTOM NAV */}
-      <DashboardNavbar activeTask={state.activeTask || undefined} />
+      <DashboardNavbar 
+        activeTask={state.activeTask || undefined} 
+        currentTab={currentTab}
+        onTabChange={setCurrentTab}
+      />
     </main>
   );
 }
