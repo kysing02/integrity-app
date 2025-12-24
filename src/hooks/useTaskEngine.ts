@@ -38,7 +38,8 @@ export function useTaskEngine(initialData: any, dayStatus: string, isFuture: boo
       if (dbActive) {
          setGlobalActiveTask(dbActive);
          // Set Anchor on Load
-         if (!anchorRef.current || anchorRef.current.id !== dbActive.id) {
+         const currentAnchor = anchorRef.current as { id: string; startTime: number; initialElapsed: number } | null;
+         if (!currentAnchor || currentAnchor.id !== dbActive.id) {
              anchorRef.current = {
                  id: dbActive.id,
                  startTime: Date.now(),
@@ -218,10 +219,8 @@ export function useTaskEngine(initialData: any, dayStatus: string, isFuture: boo
       const newTask: TaskItem = {
         ...baseTask,
         id: generateUUID(),
-        user_id: 'guest',
-        day_id: 'temp',
         created_at: new Date().toISOString()
-      };
+      } as any;
 
       if (isDaily) {
         setDailyActions(prev => [...prev, newTask]);
