@@ -8,10 +8,7 @@ STABLE_DIR="$(dirname "$DEV_DIR")/integrity-stable"
 set -e
 
 # --- 1. GET COMMIT MESSAGE ---
-# Capture the first argument as the message
 COMMIT_MSG=$1
-
-# Fallback if no message is provided
 if [ -z "$COMMIT_MSG" ]; then
     COMMIT_MSG="Update: $(date +'%Y-%m-%d %H:%M')"
 fi
@@ -23,14 +20,11 @@ echo "------------------------------------------"
 
 cd "$DEV_DIR"
 
-# Ensure we are on dev branch
-git checkout dev
-
-# OPTIONAL: Pre-deployment check
-# echo "🧪 Running build check in Dev..."
-# npm run build 
+# Standardize permissions for WSL/SourceTree
+git config core.filemode false
 
 # 1. Save and Push Dev
+git checkout dev
 git add .
 git commit -m "$COMMIT_MSG" || echo "No changes to commit"
 git push origin dev
@@ -50,23 +44,36 @@ echo "------------------------------------------"
 echo "🚀 PHASE 2: Deploying to Stable"
 echo "------------------------------------------"
 
-# Check if stable directory exists
 if [ -d "$STABLE_DIR" ]; then
     cd "$STABLE_DIR"
     
-    # Sync folder with GitHub Main
+    # Standardize permissions here too
+    git config core.filemode false
+
+    # 1. WIPE local "ghost" changes (like package-lock.json mods)
+    git reset --hard HEAD
+    git clean -fd
+    
+    # 2. Sync folder with GitHub Main
     git fetch origin main
     git reset --hard origin/main
     
-    # Production Update
-    npm install
+    # 3. USE 'npm ci' (Clean Install) 
+    # This prevents npm from modifying your lockfile during install
+    echo "📦 Installing dependencies (Clean Install)..."
+    npm ci
+    
+    # 4. Build
+    echo "🏗️ Building Next.js project..."
     npm run build
     
-    # Restart background process
-    # Tries to restart; if it's the first time, it starts it.
+    # 5. Restart background process
     pm2 restart integrity-stable || pm2 start npm --name "integrity-stable" -- start
     
-    echo "✅ SUCCESS! Stable version updated."
+    # 6. Final cleanup of any build-generated file changes
+    git reset --hard HEAD
+
+    echo "✅ SUCCESS! Stable version updated and running."
 else
     echo "⚠️  STABLE_DIR not found at $STABLE_DIR"
     echo "Skipping Phase 2. Code pushed to GitHub main successfully."
