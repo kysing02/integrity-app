@@ -154,7 +154,46 @@ input, textarea {
 }
 
 /* NEW: Force iOS Momentum Scrolling */
-.scroller {
-  -webkit-overflow-scrolling: touch; /* This turns on the bounce */
-  overscroll-behavior-y: contain;    /* Keeps the bounce inside this div */
+/* Progress Fill Animations */
+@keyframes rainbow-shift {
+  0% { background-position: 0% 50%; }
+  50% { background-position: 100% 50%; }
+  100% { background-position: 0% 50%; }
+}
+
+.animate-rainbow {
+  background: linear-gradient(
+    90deg, 
+    #ff000033, #ff7f0033, #ffff0033, #00ff0033, #0000ff33, #4b008233, #9400d333
+  );
+  background-size: 200% 200%;
+  animation: rainbow-shift 3s ease infinite;
+}
+
+@keyframes reflection-sweep {
+  0% { transform: translateX(-100%) skewX(-15deg); }
+  30% { transform: translateX(100%) skewX(-15deg); }
+  100% { transform: translateX(100%) skewX(-15deg); }
+}
+
+.animate-reflection {
+  position: relative;
+  overflow: hidden;
+}
+
+.animate-reflection::after {
+  content: "";
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 50%;
+  height: 100%;
+  background: linear-gradient(
+    to right,
+    transparent,
+    rgba(255, 255, 255, 0.4),
+    transparent
+  );
+  transform: translateX(-100%) skewX(-15deg);
+  animation: reflection-sweep 3s infinite;
 }

@@ -106,7 +106,7 @@ const ViewActive = ({ state, actions, helpers, formatCheckInTime, onOpenSettings
               <div key={task.id} onClick={() => !state.isEditing && task.status !== 'completed' && actions.toggleTask(task.id, false)}>
                 <TaskRow
                   id={task.id} title={task.title} timeRange={task.timeRange} status={task.status} category={task.category} icon={task.icon}
-                  progress={Math.min(progressPct, 100)}
+                  progress={progressPct}
                   isLast={false} isEditing={state.isEditing} isLocked={isTaskLocked}
                   isInsertionPointPast={isInsertionBlocked} isGapless={isGapless}
                   isFuture={state.isFuture}
