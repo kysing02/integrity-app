@@ -33,6 +33,7 @@ const TaskEditorModal = ({
   // Schedule Inputs
   const [startTime, setStartTime] = useState("");
   const [endTime, setEndTime] = useState("");
+  const [selectedDuration, setSelectedDuration] = useState<number | null>(null); // in minutes
 
   // Daily Action Inputs
   const [durHours, setDurHours] = useState("");
@@ -191,6 +192,41 @@ const TaskEditorModal = ({
     setTitleManuallyEdited(true);
   };
 
+  // --- DURATION BUTTON OPTIONS ---
+  const DURATION_OPTIONS = [5, 10, 15, 30]; // minutes
+
+  // --- CALCULATE END TIME ---
+  const calculateEndTime = (start: string, durationMinutes: number): string => {
+    if (!start) return "";
+
+    const startMins = getAdjustedMinutes(start);
+    const endMins = startMins + durationMinutes;
+
+    let h = Math.floor(endMins / 60);
+    const m = endMins % 60;
+
+    // Handle 24+ hour format for overnight times
+    if (h >= 24) h -= 24;
+
+    return `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`;
+  };
+
+  // --- HANDLE DURATION BUTTON CLICK ---
+  const handleDurationSelect = (duration: number) => {
+    setSelectedDuration(duration);
+    if (startTime) {
+      setEndTime(calculateEndTime(startTime, duration));
+    }
+  };
+
+  // --- HANDLE START TIME CHANGE (for Efficiency with duration) ---
+  const handleStartTimeChange = (newStartTime: string) => {
+    setStartTime(newStartTime);
+    if (category === 'EFFICIENCY' && selectedDuration) {
+      setEndTime(calculateEndTime(newStartTime, selectedDuration));
+    }
+  };
+
   return (
     <>
       <div
@@ -245,25 +281,67 @@ const TaskEditorModal = ({
             </div>
 
             {type === 'schedule' ? (
-              <div className={`flex items-center gap-3 p-1 rounded-2xl transition-colors ${conflictError ? 'bg-rose-50 ring-1 ring-rose-200' : ''}`}>
-                <div className="flex-1">
-                  <input
-                    type="time"
-                    value={startTime}
-                    onChange={(e) => setStartTime(e.target.value)}
-                    className={`w-full font-bold text-base p-2.5 rounded-xl outline-none focus:ring-2 text-center transition-all ${conflictError ? 'bg-white text-rose-600 focus:ring-rose-200' : 'bg-slate-50 text-slate-800 focus:ring-indigo-100'}`}
-                  />
+              category === 'EFFICIENCY' ? (
+                // EFFICIENCY: Start time + Duration buttons + Calculated end time
+                <div className="space-y-3">
+                  <div>
+                    <label className="text-[10px] font-bold text-slate-400 uppercase block mb-2">Start Time</label>
+                    <input
+                      type="time"
+                      value={startTime}
+                      onChange={(e) => handleStartTimeChange(e.target.value)}
+                      className="w-full font-bold text-base p-2.5 rounded-xl outline-none focus:ring-2 text-center bg-slate-50 text-slate-800 focus:ring-emerald-100"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="text-[10px] font-bold text-slate-400 uppercase block mb-2">Duration</label>
+                    <div className="grid grid-cols-4 gap-2">
+                      {DURATION_OPTIONS.map(duration => (
+                        <button
+                          key={duration}
+                          type="button"
+                          onClick={() => handleDurationSelect(duration)}
+                          className={`py-2.5 rounded-xl font-bold text-sm transition-all ${selectedDuration === duration
+                              ? 'bg-emerald-600 text-white shadow-md ring-2 ring-emerald-200'
+                              : 'bg-slate-50 text-slate-600 hover:bg-slate-100'
+                            }`}
+                        >
+                          {duration}min
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+
+                  <div>
+                    <label className="text-[10px] font-bold text-slate-400 uppercase block mb-2">End Time</label>
+                    <div className="w-full font-bold text-base p-2.5 rounded-xl bg-emerald-50 text-emerald-700 text-center border-2 border-emerald-100">
+                      {endTime || '--:--'}
+                    </div>
+                  </div>
                 </div>
-                <div className={`text-slate-300 ${conflictError ? 'text-rose-300' : ''}`}>-</div>
-                <div className="flex-1">
-                  <input
-                    type="time"
-                    value={endTime}
-                    onChange={(e) => setEndTime(e.target.value)}
-                    className={`w-full font-bold text-base p-2.5 rounded-xl outline-none focus:ring-2 text-center transition-all ${conflictError ? 'bg-white text-rose-600 focus:ring-rose-200' : 'bg-slate-50 text-slate-800 focus:ring-indigo-100'}`}
-                  />
+              ) : (
+                // CONSISTENCY: Original start/end time pickers
+                <div className={`flex items-center gap-3 p-1 rounded-2xl transition-colors ${conflictError ? 'bg-rose-50 ring-1 ring-rose-200' : ''}`}>
+                  <div className="flex-1">
+                    <input
+                      type="time"
+                      value={startTime}
+                      onChange={(e) => setStartTime(e.target.value)}
+                      className={`w-full font-bold text-base p-2.5 rounded-xl outline-none focus:ring-2 text-center transition-all ${conflictError ? 'bg-white text-rose-600 focus:ring-rose-200' : 'bg-slate-50 text-slate-800 focus:ring-indigo-100'}`}
+                    />
+                  </div>
+                  <div className={`text-slate-300 ${conflictError ? 'text-rose-300' : ''}`}>-</div>
+                  <div className="flex-1">
+                    <input
+                      type="time"
+                      value={endTime}
+                      onChange={(e) => setEndTime(e.target.value)}
+                      className={`w-full font-bold text-base p-2.5 rounded-xl outline-none focus:ring-2 text-center transition-all ${conflictError ? 'bg-white text-rose-600 focus:ring-rose-200' : 'bg-slate-50 text-slate-800 focus:ring-indigo-100'}`}
+                    />
+                  </div>
                 </div>
-              </div>
+              )
             ) : (
               <div className="flex items-end gap-3">
                 <div className="flex-1 relative">

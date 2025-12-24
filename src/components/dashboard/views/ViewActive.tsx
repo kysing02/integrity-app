@@ -11,7 +11,7 @@ import FlexBucket from '@/components/dashboard/FlexBucket';
 import TaskCircle from '@/components/dashboard/TaskCircle';
 
 interface ViewActiveProps {
-  state: any; 
+  state: any;
   actions: any;
   helpers: any;
   formatCheckInTime: (d: Date | null) => string;
@@ -33,7 +33,7 @@ const ViewActive = ({ state, actions, helpers, formatCheckInTime, onOpenSettings
     if (!t.timeRange.includes(' - ')) return false;
     const [start, end] = t.timeRange.split(' - ');
     return getAdjustedMinutes(start.trim()) < getAdjustedMinutes(state.plannedCheckIn) ||
-           getAdjustedMinutes(end.trim()) > getAdjustedMinutes(state.plannedSleep);
+      getAdjustedMinutes(end.trim()) > getAdjustedMinutes(state.plannedSleep);
   });
 
   return (
@@ -59,29 +59,29 @@ const ViewActive = ({ state, actions, helpers, formatCheckInTime, onOpenSettings
         </div>
 
         <div className="space-y-0">
-          
+
           {/* 1. Check-in Marker (ALWAYS SHOW) */}
           {(() => {
-              const firstTask = state.scheduleTasks[0];
-              const parts = firstTask ? firstTask.timeRange.split('-') : [];
-              const startTime = parts[0] ? parts[0].trim() : "";
-              const isFirstStarted = firstTask ? helpers.isTimeInPast(startTime) : false;
-              const isGapless = startTime === state.plannedCheckIn;
-              return (
-                  <CheckInRow 
-                    timeStr={state.checkInTime ? formatCheckInTime(state.checkInTime) : "--:--"}
-                    isInsertionPointPast={isFirstStarted}
-                    isGapless={isGapless}
-                    onInsert={() => actions.openAddSchedule(-1)}
-                    
-                    // --- NEW PROPS ---
-                    isFuture={state.isFuture}
-                    hasCheckInTime={!!state.checkInTime}
-                    plannedCheckIn={state.plannedCheckIn}
-                    onCheckInNow={actions.startDay} // Re-use startDay to trigger the Check-In timestamp
-                    onPlanClick={state.isEditing ? onOpenSettings : undefined}
-                  />
-              );
+            const firstTask = state.scheduleTasks[0];
+            const parts = firstTask ? firstTask.timeRange.split('-') : [];
+            const startTime = parts[0] ? parts[0].trim() : "";
+            const isFirstStarted = firstTask ? helpers.isTimeInPast(startTime) : false;
+            const isGapless = startTime === state.plannedCheckIn;
+            return (
+              <CheckInRow
+                timeStr={state.checkInTime ? formatCheckInTime(state.checkInTime) : "--:--"}
+                isInsertionPointPast={isFirstStarted}
+                isGapless={isGapless}
+                onInsert={() => actions.openAddSchedule(-1)}
+
+                // --- NEW PROPS ---
+                isFuture={state.isFuture}
+                hasCheckInTime={!!state.checkInTime}
+                plannedCheckIn={state.plannedCheckIn}
+                onCheckInNow={actions.startDay} // Re-use startDay to trigger the Check-In timestamp
+                onPlanClick={state.isEditing ? onOpenSettings : undefined}
+              />
+            );
           })()}
 
           {/* 2. Scheduled Tasks */}
@@ -94,23 +94,23 @@ const ViewActive = ({ state, actions, helpers, formatCheckInTime, onOpenSettings
             let isGapless = false;
 
             if (nextTask) {
-                const nextParts = nextTask.timeRange.split('-');
-                const nextStart = nextParts[0] ? nextParts[0].trim() : "";
-                if (helpers.isTimeInPast(nextStart)) isInsertionBlocked = true;
-                const currParts = task.timeRange.split('-');
-                const currEnd = currParts[1] ? currParts[1].trim() : "";
-                if (currEnd === nextStart) isGapless = true;
+              const nextParts = nextTask.timeRange.split('-');
+              const nextStart = nextParts[0] ? nextParts[0].trim() : "";
+              if (helpers.isTimeInPast(nextStart)) isInsertionBlocked = true;
+              const currParts = task.timeRange.split('-');
+              const currEnd = currParts[1] ? currParts[1].trim() : "";
+              if (currEnd === nextStart) isGapless = true;
             }
 
             return (
               <div key={task.id} onClick={() => !state.isEditing && task.status !== 'completed' && actions.toggleTask(task.id, false)}>
-                <TaskRow 
-                  id={task.id} title={task.title} timeRange={task.timeRange} status={task.status} category={task.category} icon={task.icon} 
-                  progress={Math.min(progressPct, 100)} 
+                <TaskRow
+                  id={task.id} title={task.title} timeRange={task.timeRange} status={task.status} category={task.category} icon={task.icon}
+                  progress={Math.min(progressPct, 100)}
                   isLast={false} isEditing={state.isEditing} isLocked={isTaskLocked}
                   isInsertionPointPast={isInsertionBlocked} isGapless={isGapless}
                   isFuture={state.isFuture}
-                  onDelete={() => actions.deleteTask(task.id, false)} 
+                  onDelete={() => actions.deleteTask(task.id, false)}
                   onInsert={() => actions.openAddSchedule(index)}
                   onEditClick={() => actions.openEditTask(task)}
                   onToggleComplete={() => actions.toggleComplete(task.id, false)}
@@ -122,28 +122,28 @@ const ViewActive = ({ state, actions, helpers, formatCheckInTime, onOpenSettings
           {/* 3. Empty State (SHOW ONLY IF NO TASKS) */}
           {!hasTasks && (
             <div onClick={() => actions.openAddSchedule(-1)} className="py-8 text-center cursor-pointer group animate-in zoom-in-95 duration-300">
-                <div className="inline-flex items-center justify-center w-16 h-16 rounded-full bg-indigo-50 text-indigo-400 mb-4 group-hover:scale-110 transition-transform shadow-sm ring-4 ring-white">
-                    <Plus size={32} />
-                </div>
-                <p className="text-sm font-bold text-slate-800 group-hover:text-indigo-600 transition-colors">Add your first task</p>
-                <p className="text-xs text-slate-400 mt-1">Start defining your day</p>
+              <div className="inline-flex items-center justify-center w-16 h-16 rounded-full bg-indigo-50 text-indigo-400 mb-4 group-hover:scale-110 transition-transform shadow-sm ring-4 ring-white">
+                <Plus size={32} />
+              </div>
+              <p className="text-sm font-bold text-slate-800 group-hover:text-indigo-600 transition-colors">Add new task</p>
+              <p className="text-xs text-slate-400 mt-1">Start defining your day</p>
             </div>
           )}
 
           {/* 4. End Day Button (ALWAYS SHOW AS TARGET MARKER) */}
           <div className="pt-4 flex flex-col items-center gap-2">
-              <span className="text-[10px] font-bold text-slate-300">{state.plannedSleep}</span>
-              {state.isFuture ? (
-                state.isEditing && (
-                  <button onClick={onOpenSettings} className="flex items-center gap-2 text-xs font-bold text-indigo-600 bg-indigo-50 px-6 py-3 rounded-2xl hover:bg-indigo-100 transition-all active:scale-95">
-                    <Settings2 size={16} /><span>Plan Sleep Time</span>
-                  </button>
-                )
-              ) : (
-                <button onClick={actions.endDay} className="flex items-center gap-2 text-xs font-bold text-slate-400 bg-slate-100 px-6 py-3 rounded-2xl hover:bg-slate-200 hover:text-slate-600 transition-all active:scale-95">
-                  <LogOut size={16} /><span>Call it a day</span>
+            <span className="text-[10px] font-bold text-slate-300">{state.plannedSleep}</span>
+            {state.isFuture ? (
+              state.isEditing && (
+                <button onClick={onOpenSettings} className="flex items-center gap-2 text-xs font-bold text-indigo-600 bg-indigo-50 px-6 py-3 rounded-2xl hover:bg-indigo-100 transition-all active:scale-95">
+                  <Settings2 size={16} /><span>Plan Sleep Time</span>
                 </button>
-              )}
+              )
+            ) : (
+              <button onClick={actions.endDay} className="flex items-center gap-2 text-xs font-bold text-slate-400 bg-slate-100 px-6 py-3 rounded-2xl hover:bg-slate-200 hover:text-slate-600 transition-all active:scale-95">
+                <LogOut size={16} /><span>Call it a day</span>
+              </button>
+            )}
           </div>
         </div>
       </section>
@@ -161,33 +161,33 @@ const ViewActive = ({ state, actions, helpers, formatCheckInTime, onOpenSettings
           )}
         </div>
 
-        <div className="-mx-6 mb-4"> 
-          <FlexBucket 
-            totalVolumeSeconds={state.totalVolumeSeconds} 
+        <div className="-mx-6 mb-4">
+          <FlexBucket
+            totalVolumeSeconds={state.totalVolumeSeconds}
             workLeftSeconds={state.workLeftSeconds}
             plannedSleep={state.plannedSleep}
             plannedCheckIn={state.plannedCheckIn} // <--- Pass Config
             isFuture={state.isFuture}             // <--- Pass Future Flag
           />
         </div>
-        
+
         <div className="grid grid-cols-4 gap-4">
           {state.dailyActions.map((action: TaskItem, index: number) => {
             const totalSecs = parseDurationToSeconds(action.timeRange);
             const rawProgress = totalSecs > 0 ? (action.elapsedSeconds / totalSecs) * 100 : 0;
             return (
-              <TaskCircle 
-                key={action.id} title={action.title} duration={action.timeRange} Icon={action.icon} category={action.category} 
-                progress={Math.min(rawProgress, 100)} isActive={action.status === 'in_progress'} 
+              <TaskCircle
+                key={action.id} title={action.title} duration={action.timeRange} Icon={action.icon} category={action.category}
+                progress={Math.min(rawProgress, 100)} isActive={action.status === 'in_progress'}
                 onClick={() => {
                   if (action.status === 'completed') return;
                   if (state.isEditingActions) actions.openEditTask(action);
                   else actions.toggleTask(action.id, true);
                 }}
-                isEditing={state.isEditingActions} 
+                isEditing={state.isEditingActions}
                 onDelete={() => actions.deleteTask(action.id, true)}
                 onDragStart={() => handleDragStart(index)} onDragOver={(e) => handleDragOver(e, index)} onDrop={handleDrop}
-                isCompleted={action.status === 'completed'} 
+                isCompleted={action.status === 'completed'}
                 onLongPress={() => actions.toggleComplete(action.id, true)}
               />
             );
