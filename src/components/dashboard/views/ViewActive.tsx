@@ -119,16 +119,17 @@ const ViewActive = ({ state, actions, helpers, formatCheckInTime, onOpenSettings
             );
           })}
 
-          {/* 3. Empty State (SHOW ONLY IF NO TASKS) */}
-          {!hasTasks && (
-            <div onClick={() => actions.openAddSchedule(-1)} className="py-8 text-center cursor-pointer group animate-in zoom-in-95 duration-300">
-              <div className="inline-flex items-center justify-center w-16 h-16 rounded-full bg-indigo-50 text-indigo-400 mb-4 group-hover:scale-110 transition-transform shadow-sm ring-4 ring-white">
-                <Plus size={32} />
-              </div>
-              <p className="text-sm font-bold text-slate-800 group-hover:text-indigo-600 transition-colors">Add new task</p>
-              <p className="text-xs text-slate-400 mt-1">Start defining your day</p>
+          {/* 3. Add Task Button (ALWAYS SHOW) */}
+          <div
+            onClick={() => actions.openAddSchedule(state.scheduleTasks.length - 1)}
+            className={`py-8 text-center cursor-pointer group animate-in zoom-in-95 duration-300 ${hasTasks ? 'mt-2 border-t border-dashed border-slate-100' : ''}`}
+          >
+            <div className={`inline-flex items-center justify-center rounded-full bg-indigo-50 text-indigo-400 group-hover:scale-110 transition-transform shadow-sm ring-4 ring-white ${hasTasks ? 'w-10 h-10 mb-2' : 'w-16 h-16 mb-4'}`}>
+              <Plus size={hasTasks ? 20 : 32} />
             </div>
-          )}
+            <p className={`font-bold text-slate-800 group-hover:text-indigo-600 transition-colors ${hasTasks ? 'text-xs' : 'text-sm'}`}>Add new task</p>
+            {!hasTasks && <p className="text-xs text-slate-400 mt-1">Start defining your day</p>}
+          </div>
 
           {/* 4. End Day Button (ALWAYS SHOW AS TARGET MARKER) */}
           <div className="pt-4 flex flex-col items-center gap-2">
