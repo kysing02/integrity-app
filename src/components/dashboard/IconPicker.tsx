@@ -1,7 +1,7 @@
 import React from 'react';
-import { 
-  Brain, Users, Dumbbell, Pencil, BookOpen, Brush, Sparkles, 
-  Coffee, Sun, Briefcase, Utensils, Music, ShoppingCart, Code, Tv 
+import {
+  Brain, Users, Dumbbell, Pencil, BookOpen, Brush, Sparkles,
+  Coffee, Sun, Briefcase, Utensils, Music, ShoppingCart, Code, Tv
 } from 'lucide-react';
 
 const ICONS = [
@@ -24,7 +24,7 @@ const ICONS = [
 
 interface IconPickerProps {
   selectedIcon: any;
-  onChange: (icon: any) => void;
+  onChange: (icon: any, label: string) => void;
 }
 
 const IconPicker = ({ selectedIcon, onChange }: IconPickerProps) => {
@@ -36,12 +36,11 @@ const IconPicker = ({ selectedIcon, onChange }: IconPickerProps) => {
           <button
             key={idx}
             type="button"
-            onClick={() => onChange(Icon)}
-            className={`flex flex-col items-center gap-1.5 p-2 rounded-xl transition-all ${
-              isSelected 
-                ? 'bg-indigo-600 text-white shadow-md scale-105 ring-2 ring-indigo-200' 
+            onClick={() => onChange(Icon, label)}
+            className={`flex flex-col items-center gap-1.5 p-2 rounded-xl transition-all ${isSelected
+                ? 'bg-indigo-600 text-white shadow-md scale-105 ring-2 ring-indigo-200'
                 : 'bg-slate-50 text-slate-400 hover:bg-slate-100 hover:text-slate-600'
-            }`}
+              }`}
           >
             <Icon size={20} />
             <span className="text-[9px] font-bold truncate w-full text-center">{label}</span>
