@@ -6,6 +6,7 @@ import { TaskItem, TimerEvent } from '@/types/dashboard';
 import { generateDayReport } from '@/lib/reportUtils';
 import { parseDurationToSeconds } from '@/lib/timeUtils';
 
+
 interface DaySummaryModalProps {
   isOpen: boolean;
   onClose: () => void;
