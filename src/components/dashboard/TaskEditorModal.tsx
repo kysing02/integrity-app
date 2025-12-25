@@ -3,7 +3,7 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { X, Check, Brain, Plus, AlertCircle } from 'lucide-react';
 import { TaskItem } from '@/types/dashboard';
-import IconPicker from '@/components/dashboard/IconPicker';
+import IconPicker, { ICONS } from '@/components/dashboard/IconPicker';
 import { getAdjustedMinutes, doRangesOverlap } from '@/lib/timeUtils';
 
 interface TaskEditorModalProps {
@@ -176,13 +176,39 @@ const TaskEditorModal = ({
     onClose();
   };
 
-  // --- ICON CHANGE HANDLER (Auto-fill Title) ---
-  const handleIconChange = (icon: any, label: string) => {
+  // --- ICON CHANGE HANDLER (Auto-fill Title & Duration) ---
+  const handleIconChange = (icon: any, label: string, recommendedMinutes: number, iconCategory: string) => {
     setSelectedIcon(icon);
+
+    // Auto-update category if it differs
+    if (iconCategory !== category) {
+      setCategory(iconCategory as 'EFFICIENCY' | 'CONSISTENCY');
+    }
 
     // Auto-fill title until user manually edits it (only in add mode)
     if (mode === 'add' && !titleManuallyEdited) {
       setTitle(label);
+    }
+
+    // Auto-set duration based on icon
+    if (type === 'schedule') {
+      if (iconCategory === 'EFFICIENCY') {
+        setSelectedDuration(recommendedMinutes);
+        if (startTime) {
+          setEndTime(calculateEndTime(startTime, recommendedMinutes));
+        }
+      } else {
+        // For consistency, just adjust the end time based on recommended minutes
+        if (startTime) {
+          setEndTime(calculateEndTime(startTime, recommendedMinutes));
+        }
+      }
+    } else {
+      // Daily mode
+      const h = Math.floor(recommendedMinutes / 60);
+      const m = recommendedMinutes % 60;
+      setDurHours(h > 0 ? String(h) : "");
+      setDurMins(String(m));
     }
   };
 
@@ -261,10 +287,26 @@ const TaskEditorModal = ({
 
           {/* CATEGORY */}
           <div className="mb-5 flex p-1 bg-slate-100 rounded-xl">
-            <button onClick={() => setCategory('CONSISTENCY')} className={`flex-1 flex items-center justify-center gap-2 py-1.5 rounded-lg text-[11px] font-bold transition-all ${category === 'CONSISTENCY' ? 'bg-white text-indigo-600 shadow-sm' : 'text-slate-400'}`}>
+            <button
+              onClick={() => {
+                setCategory('CONSISTENCY');
+                // Pick first consistency icon as default
+                const firstCons = ICONS.find(i => i.category === 'CONSISTENCY');
+                if (firstCons) handleIconChange(firstCons.icon, firstCons.label, firstCons.recommendedMinutes, firstCons.category);
+              }}
+              className={`flex-1 flex items-center justify-center gap-2 py-1.5 rounded-lg text-[11px] font-bold transition-all ${category === 'CONSISTENCY' ? 'bg-white text-indigo-600 shadow-sm' : 'text-slate-400'}`}
+            >
               <div className={`w-1.5 h-1.5 rounded-full ${category === 'CONSISTENCY' ? 'bg-indigo-500' : 'bg-slate-300'}`} /> Consistency
             </button>
-            <button onClick={() => setCategory('EFFICIENCY')} className={`flex-1 flex items-center justify-center gap-2 py-1.5 rounded-lg text-[11px] font-bold transition-all ${category === 'EFFICIENCY' ? 'bg-white text-emerald-600 shadow-sm' : 'text-slate-400'}`}>
+            <button
+              onClick={() => {
+                setCategory('EFFICIENCY');
+                // Pick first efficiency icon as default
+                const firstEff = ICONS.find(i => i.category === 'EFFICIENCY');
+                if (firstEff) handleIconChange(firstEff.icon, firstEff.label, firstEff.recommendedMinutes, firstEff.category);
+              }}
+              className={`flex-1 flex items-center justify-center gap-2 py-1.5 rounded-lg text-[11px] font-bold transition-all ${category === 'EFFICIENCY' ? 'bg-white text-emerald-600 shadow-sm' : 'text-slate-400'}`}
+            >
               <div className={`w-1.5 h-1.5 rounded-full ${category === 'EFFICIENCY' ? 'bg-emerald-500' : 'bg-slate-300'}`} /> Efficiency
             </button>
           </div>
@@ -303,8 +345,8 @@ const TaskEditorModal = ({
                           type="button"
                           onClick={() => handleDurationSelect(duration)}
                           className={`py-2.5 rounded-xl font-bold text-sm transition-all ${selectedDuration === duration
-                              ? 'bg-emerald-600 text-white shadow-md ring-2 ring-emerald-200'
-                              : 'bg-slate-50 text-slate-600 hover:bg-slate-100'
+                            ? 'bg-emerald-600 text-white shadow-md ring-2 ring-emerald-200'
+                            : 'bg-slate-50 text-slate-600 hover:bg-slate-100'
                             }`}
                         >
                           {duration}min
@@ -359,7 +401,7 @@ const TaskEditorModal = ({
           {/* ICON PICKER */}
           <div className="mb-2">
             <h4 className="text-[10px] font-bold text-slate-400 uppercase mb-2">Icon</h4>
-            <IconPicker selectedIcon={selectedIcon} onChange={handleIconChange} />
+            <IconPicker selectedIcon={selectedIcon} category={category} onChange={handleIconChange} />
           </div>
         </div>
 

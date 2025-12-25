@@ -4,42 +4,45 @@ import {
   Coffee, Sun, Briefcase, Utensils, Music, ShoppingCart, Code, Tv
 } from 'lucide-react';
 
-const ICONS = [
-  { icon: Brain, label: 'Deep Work' },
-  { icon: Code, label: 'Coding' },
-  { icon: BookOpen, label: 'Study' },
-  { icon: Pencil, label: 'Write' },
-  { icon: Users, label: 'Meeting' },
-  { icon: Briefcase, label: 'Work' },
-  { icon: Dumbbell, label: 'Exercise' },
-  { icon: Utensils, label: 'Meal' },
-  { icon: Coffee, label: 'Break' },
-  { icon: Sun, label: 'Morning' },
-  { icon: Brush, label: 'Create' },
-  { icon: Sparkles, label: 'Routine' },
-  { icon: Music, label: 'Relax' },
-  { icon: ShoppingCart, label: 'Errand' },
-  { icon: Tv, label: 'Leisure' },
+export const ICONS = [
+  { icon: Brain, label: 'Deep Work', category: 'CONSISTENCY', recommendedMinutes: 90 },
+  { icon: Code, label: 'Coding', category: 'CONSISTENCY', recommendedMinutes: 120 },
+  { icon: BookOpen, label: 'Study', category: 'CONSISTENCY', recommendedMinutes: 60 },
+  { icon: Pencil, label: 'Write', category: 'CONSISTENCY', recommendedMinutes: 45 },
+  { icon: Briefcase, label: 'Work', category: 'CONSISTENCY', recommendedMinutes: 120 },
+  { icon: Dumbbell, label: 'Exercise', category: 'CONSISTENCY', recommendedMinutes: 60 },
+  { icon: Brush, label: 'Create', category: 'CONSISTENCY', recommendedMinutes: 90 },
+  { icon: Music, label: 'Relax', category: 'CONSISTENCY', recommendedMinutes: 30 },
+  { icon: Tv, label: 'Leisure', category: 'CONSISTENCY', recommendedMinutes: 60 },
+  { icon: Users, label: 'Meeting', category: 'EFFICIENCY', recommendedMinutes: 30 },
+  { icon: Utensils, label: 'Meal', category: 'EFFICIENCY', recommendedMinutes: 30 },
+  { icon: Coffee, label: 'Break', category: 'EFFICIENCY', recommendedMinutes: 15 },
+  { icon: Sun, label: 'Morning', category: 'EFFICIENCY', recommendedMinutes: 30 },
+  { icon: Sparkles, label: 'Routine', category: 'EFFICIENCY', recommendedMinutes: 20 },
+  { icon: ShoppingCart, label: 'Errand', category: 'EFFICIENCY', recommendedMinutes: 45 },
 ];
 
 interface IconPickerProps {
   selectedIcon: any;
-  onChange: (icon: any, label: string) => void;
+  category: 'EFFICIENCY' | 'CONSISTENCY';
+  onChange: (icon: any, label: string, recommendedMinutes: number, category: string) => void;
 }
 
-const IconPicker = ({ selectedIcon, onChange }: IconPickerProps) => {
+const IconPicker = ({ selectedIcon, category, onChange }: IconPickerProps) => {
+  const filteredIcons = ICONS.filter(i => i.category === category);
+
   return (
     <div className="grid grid-cols-5 gap-3 mb-6">
-      {ICONS.map(({ icon: Icon, label }, idx) => {
-        const isSelected = selectedIcon === Icon; // Comparison by reference usually works for Lucide components
+      {filteredIcons.map(({ icon: Icon, label, recommendedMinutes, category: iconCat }, idx) => {
+        const isSelected = selectedIcon === Icon;
         return (
           <button
             key={idx}
             type="button"
-            onClick={() => onChange(Icon, label)}
+            onClick={() => onChange(Icon, label, recommendedMinutes, iconCat)}
             className={`flex flex-col items-center gap-1.5 p-2 rounded-xl transition-all ${isSelected
-                ? 'bg-indigo-600 text-white shadow-md scale-105 ring-2 ring-indigo-200'
-                : 'bg-slate-50 text-slate-400 hover:bg-slate-100 hover:text-slate-600'
+              ? 'bg-indigo-600 text-white shadow-md scale-105 ring-2 ring-indigo-200'
+              : 'bg-slate-50 text-slate-400 hover:bg-slate-100 hover:text-slate-600'
               }`}
           >
             <Icon size={20} />
