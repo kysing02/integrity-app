@@ -158,14 +158,24 @@ const TaskRow = ({
 
   // Fill Meter Logic
   const getFillColor = (p: number) => {
-    if (p >= 100) return 'animate-rainbow';
-    if (p > 80) return 'bg-emerald-500/10';
-    if (p >= 20) return 'bg-amber-400/10';
-    return 'bg-red-500/10';
+    if (isEfficiency) {
+      // Efficiency Logic:
+      // Ended within timeframe (superb) -> Rainbow (handled in calling logic or here)
+      if (isCompleted && p <= 100) return 'animate-rainbow';
+      if (p > 150) return 'bg-red-500/10';
+      if (p > 100) return 'bg-amber-400/10';
+      return 'bg-emerald-500/10'; // 0-100% is Green
+    } else {
+      // Consistency Logic:
+      if (p >= 100) return 'animate-rainbow';
+      if (p > 80) return 'bg-emerald-500/10';
+      if (p >= 20) return 'bg-amber-400/10';
+      return 'bg-red-500/10';
+    }
   };
 
-  const showReflection = progress > 100;
-  const isOverComplete = progress > 100;
+  const isOverComplete = isEfficiency ? progress > 100 : progress > 100;
+  const showReflection = isOverComplete;
 
   const cardClass = isMarker
     ? 'bg-transparent border-transparent pl-0'
