@@ -176,11 +176,10 @@ const TaskRow = ({
 
   const isOverComplete = isEfficiency ? progress > 100 : progress > 100;
   const showReflection = isOverComplete;
-
   const cardClass = isMarker
     ? 'bg-transparent border-transparent pl-0'
     : `relative overflow-hidden p-4 rounded-2xl border transition-all duration-300 ${isCurrentTimeSlot && !isEditable && !readOnly
-      ? 'bg-indigo-50/20 border-indigo-200 shadow-lg shadow-indigo-100' // Reduced opacity to see fill
+      ? 'bg-indigo-50/20 border-indigo-200 shadow-lg shadow-indigo-100 animate-breathe' // Reduced opacity to see fill
       : 'bg-white border-slate-100 shadow-sm'
     } ${isEditable ? 'hover:border-indigo-300 active:scale-[0.99]' : ''} ${showReflection ? 'animate-reflection' : ''}`;
 

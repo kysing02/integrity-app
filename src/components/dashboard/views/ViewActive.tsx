@@ -102,12 +102,22 @@ const ViewActive = ({ state, actions, helpers, formatCheckInTime, onOpenSettings
               if (currEnd === nextStart) isGapless = true;
             }
 
+            const [startPart, endPart] = task.timeRange.split(' - ');
+            const startMins = getAdjustedMinutes(startPart?.trim());
+            const endMins = getAdjustedMinutes(endPart?.trim());
+            const now = new Date();
+            const nowH = now.getHours();
+            const nowM = now.getMinutes();
+            const nowMins = (nowH < 5 ? nowH + 24 : nowH) * 60 + nowM;
+            const isTaskCurrent = nowMins >= startMins && nowMins < endMins && !state.isFuture && state.isToday;
+
             return (
               <div key={task.id} onClick={() => !state.isEditing && task.status !== 'completed' && actions.toggleTask(task.id, false)}>
                 <TaskRow
                   id={task.id} title={task.title} timeRange={task.timeRange} status={task.status} category={task.category} icon={task.icon}
                   progress={progressPct}
                   isLast={false} isEditing={state.isEditing} isLocked={isTaskLocked}
+                  isCurrentTimeSlot={isTaskCurrent}
                   isInsertionPointPast={isInsertionBlocked} isGapless={isGapless}
                   isFuture={state.isFuture}
                   onDelete={() => actions.deleteTask(task.id, false)}

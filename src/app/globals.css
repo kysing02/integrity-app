@@ -122,33 +122,47 @@
   * {
     @apply border-border outline-ring/50;
   }
+
   body {
     @apply bg-background text-foreground;
   }
 }
 
 /* Disable selection globally */
-html, body {
+html,
+body {
   position: fixed;
   width: 100%;
-  height: 100%;               /* Force full height */
-  overflow: hidden;           /* Disable body scroll */
+  height: 100%;
+  /* Force full height */
+  overflow: hidden;
+  /* Disable body scroll */
   background-color: #f8fafc;
-  overscroll-behavior: none; /* Stop the bounce propagation */
+  overscroll-behavior: none;
+  /* Stop the bounce propagation */
 
-  -webkit-user-select: none; /* Safari/Chrome */
-  -moz-user-select: none;    /* Firefox */
-  -ms-user-select: none;     /* IE/Edge */
-  user-select: none;         /* Standard */
-  -webkit-tap-highlight-color: transparent; /* Removes blue flash on mobile tap */
-  cursor: default;           /* Prevents "I-beam" text cursor */
+  -webkit-user-select: none;
+  /* Safari/Chrome */
+  -moz-user-select: none;
+  /* Firefox */
+  -ms-user-select: none;
+  /* IE/Edge */
+  user-select: none;
+  /* Standard */
+  -webkit-tap-highlight-color: transparent;
+  /* Removes blue flash on mobile tap */
+  cursor: default;
+  /* Prevents "I-beam" text cursor */
 
-  -webkit-touch-callout: none !important;       /* Disable the long-press vibration/menu on Mobile */
-  -webkit-tap-highlight-color: transparent;     /* Remove blue highlight on tap */
+  -webkit-touch-callout: none !important;
+  /* Disable the long-press vibration/menu on Mobile */
+  -webkit-tap-highlight-color: transparent;
+  /* Remove blue highlight on tap */
 }
 
 /* Re-enable selection ONLY for input fields */
-input, textarea {
+input,
+textarea {
   -webkit-user-select: text;
   user-select: text;
 }
@@ -156,24 +170,38 @@ input, textarea {
 /* NEW: Force iOS Momentum Scrolling */
 /* Progress Fill Animations */
 @keyframes rainbow-shift {
-  0% { background-position: 0% 50%; }
-  50% { background-position: 100% 50%; }
-  100% { background-position: 0% 50%; }
+  0% {
+    background-position: 0% 50%;
+  }
+
+  50% {
+    background-position: 100% 50%;
+  }
+
+  100% {
+    background-position: 0% 50%;
+  }
 }
 
 .animate-rainbow {
-  background: linear-gradient(
-    90deg, 
-    #ff000033, #ff7f0033, #ffff0033, #00ff0033, #0000ff33, #4b008233, #9400d333
-  );
+  background: linear-gradient(90deg,
+      #ff000033, #ff7f0033, #ffff0033, #00ff0033, #0000ff33, #4b008233, #9400d333);
   background-size: 200% 200%;
   animation: rainbow-shift 3s ease infinite;
 }
 
 @keyframes reflection-sweep {
-  0% { transform: translateX(-100%) skewX(-15deg); }
-  30% { transform: translateX(100%) skewX(-15deg); }
-  100% { transform: translateX(100%) skewX(-15deg); }
+  0% {
+    transform: translateX(-100%) skewX(-15deg);
+  }
+
+  30% {
+    transform: translateX(100%) skewX(-15deg);
+  }
+
+  100% {
+    transform: translateX(100%) skewX(-15deg);
+  }
 }
 
 .animate-reflection {
@@ -188,12 +216,32 @@ input, textarea {
   left: 0;
   width: 50%;
   height: 100%;
-  background: linear-gradient(
-    to right,
-    transparent,
-    rgba(255, 255, 255, 0.4),
-    transparent
-  );
+  background: linear-gradient(to right,
+      transparent,
+      rgba(255, 255, 255, 0.4),
+      transparent);
   transform: translateX(-100%) skewX(-15deg);
   animation: reflection-sweep 3s infinite;
+}
+
+@keyframes breathe-hold {
+
+  0%,
+  100% {
+    transform: scale(1);
+    outline: 2px solid rgba(79, 70, 229, 0);
+    outline-offset: 0px;
+  }
+
+  40%,
+  60% {
+    transform: scale(1.01);
+    outline: 2px solid rgba(79, 70, 229, 0.4);
+    outline-offset: 4px;
+    box-shadow: 0 0 20px rgba(79, 70, 229, 0.1);
+  }
+}
+
+.animate-breathe {
+  animation: breathe-hold 3s ease-in-out infinite;
 }
