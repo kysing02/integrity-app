@@ -34,6 +34,7 @@ const TaskEditorModal = ({
   const [startTime, setStartTime] = useState("");
   const [endTime, setEndTime] = useState("");
   const [selectedDuration, setSelectedDuration] = useState<number | null>(null); // in minutes
+  const [isCustomDuration, setIsCustomDuration] = useState(false);
 
   // Daily Action Inputs
   const [durHours, setDurHours] = useState("");
@@ -144,6 +145,7 @@ const TaskEditorModal = ({
           const mm = String(m).padStart(2, '0');
 
           setEndTime(`${hh}:${mm}`);
+          setIsCustomDuration(false);
 
         } else {
           // Daily Action Default
@@ -194,6 +196,7 @@ const TaskEditorModal = ({
     if (type === 'schedule') {
       if (iconCategory === 'EFFICIENCY') {
         setSelectedDuration(recommendedMinutes);
+        setIsCustomDuration(false);
         if (startTime) {
           setEndTime(calculateEndTime(startTime, recommendedMinutes));
         }
@@ -240,6 +243,7 @@ const TaskEditorModal = ({
   // --- HANDLE DURATION BUTTON CLICK ---
   const handleDurationSelect = (duration: number) => {
     setSelectedDuration(duration);
+    setIsCustomDuration(false);
     if (startTime) {
       setEndTime(calculateEndTime(startTime, duration));
     }
@@ -338,28 +342,47 @@ const TaskEditorModal = ({
 
                   <div>
                     <label className="text-[10px] font-bold text-slate-400 uppercase block mb-2">Duration</label>
-                    <div className="grid grid-cols-4 gap-2">
+                    <div className="grid grid-cols-5 gap-2">
                       {DURATION_OPTIONS.map(duration => (
                         <button
                           key={duration}
                           type="button"
                           onClick={() => handleDurationSelect(duration)}
-                          className={`py-2.5 rounded-xl font-bold text-sm transition-all ${selectedDuration === duration
+                          className={`py-2.5 rounded-xl font-bold text-[11px] transition-all ${!isCustomDuration && selectedDuration === duration
                             ? 'bg-emerald-600 text-white shadow-md ring-2 ring-emerald-200'
                             : 'bg-slate-50 text-slate-600 hover:bg-slate-100'
                             }`}
                         >
-                          {duration}min
+                          {duration}m
                         </button>
                       ))}
+                      <button
+                        type="button"
+                        onClick={() => { setIsCustomDuration(true); setSelectedDuration(null); }}
+                        className={`py-2.5 rounded-xl font-bold text-[11px] transition-all ${isCustomDuration
+                          ? 'bg-slate-800 text-white shadow-md ring-2 ring-slate-200'
+                          : 'bg-slate-50 text-slate-600 hover:bg-slate-100'
+                          }`}
+                      >
+                        Custom
+                      </button>
                     </div>
                   </div>
 
                   <div>
                     <label className="text-[10px] font-bold text-slate-400 uppercase block mb-2">End Time</label>
-                    <div className="w-full font-bold text-base p-2.5 rounded-xl bg-emerald-50 text-emerald-700 text-center border-2 border-emerald-100">
-                      {endTime || '--:--'}
-                    </div>
+                    {isCustomDuration ? (
+                      <input
+                        type="time"
+                        value={endTime}
+                        onChange={(e) => setEndTime(e.target.value)}
+                        className="w-full font-bold text-base p-2.5 rounded-xl outline-none focus:ring-2 text-center bg-slate-900 text-white focus:ring-slate-200"
+                      />
+                    ) : (
+                      <div className="w-full font-bold text-base p-2.5 rounded-xl bg-emerald-50 text-emerald-700 text-center border-2 border-emerald-100">
+                        {endTime || '--:--'}
+                      </div>
+                    )}
                   </div>
                 </div>
               ) : (
